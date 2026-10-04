@@ -323,6 +323,8 @@ class ToggleRow(QCheckBox):
 # ── Main window ───────────────────────────────────────────────────────────────
 
 from pongedit.version import VERSION as APP_VERSION
+from pongedit import keymap
+from pongedit.keymap import label as KL
 
 
 class MainWindow(QMainWindow):
@@ -467,7 +469,7 @@ class MainWindow(QMainWindow):
         self.hl_btn.setCheckable(True)
         self.hl_btn.setToolTip(
             "Trier les séquences conservées : chaque séquence est lue puis mise en pause.\n"
-            "I garder  ·  N jeter  ·  ⇧← ⇧→ séquence préc./suiv.  ·  Espace revoir  ·  Échap quitter\n"
+            f"{KL('I')} garder  ·  {KL('N')} jeter  ·  ⇧← ⇧→ séquence préc./suiv.  ·  Espace revoir  ·  Échap quitter\n"
             "Rouvrable après le tri pour corriger une décision."
         )
         self.hl_btn.setCursor(Qt.PointingHandCursor)
@@ -490,13 +492,13 @@ class MainWindow(QMainWindow):
         self.mute_btn = QPushButton("Son")
         self.mute_btn.setProperty("variant", "toolbar")
         self.mute_btn.setCheckable(True)
-        self.mute_btn.setToolTip("Couper / rétablir le son  (M)")
+        self.mute_btn.setToolTip(f"Couper / rétablir le son  ({KL('M')})")
         self.mute_btn.setCursor(Qt.PointingHandCursor)
         self.mute_btn.clicked.connect(self._toggle_mute)
         tbl.addWidget(self.mute_btn)
         self.speed_lbl = QLabel("1×")
         self.speed_lbl.setObjectName("badge")
-        self.speed_lbl.setToolTip("Vitesse de lecture  ( [ ralentir · ] accélérer )")
+        self.speed_lbl.setToolTip(f"Vitesse de lecture  ( {KL('[')} ralentir · {KL(']')} accélérer )")
         self.speed_lbl.setAlignment(Qt.AlignCenter)
         self.speed_lbl.setMinimumWidth(58)
         self.speed_lbl.setFixedHeight(34)
@@ -519,15 +521,15 @@ class MainWindow(QMainWindow):
         # quand on bascule (cf. _set_hints_mode).
         hint_pages = [
             [   # montage
-                [("A", "point J1"), ("S", "point J2"), ("C", "couper (tenir)"),
-                 ("F", "changer service"), ("R", "rotation"), ("[ ]", "vitesse")],
-                [("Z", "annuler"), ("⇧Z", "rétablir"), ("Espace", "lecture / pause"),
-                 ("M", "muet"), ("← →", "±5 s")],
+                [(KL("A"), "point J1"), (KL("S"), "point J2"), (KL("C"), "couper (tenir)"),
+                 (KL("F"), "changer service"), (KL("R"), "rotation"), (f'{KL("[")} {KL("]")}', "vitesse")],
+                [(KL("Z"), "annuler"), ("⇧" + KL("Z"), "rétablir"), ("Espace", "lecture / pause"),
+                 (KL("M"), "muet"), ("← →", "±5 s")],
             ],
             [   # mode highlight
-                [("I", "garder séquence"), ("N", "jeter séquence"),
+                [(KL("I"), "garder séquence"), (KL("N"), "jeter séquence"),
                  ("Espace", "revoir séquence"), ("⇧← ⇧→", "séq. préc. / suiv.")],
-                [("Z", "annuler"), ("M", "muet"), ("← →", "±5 s"), ("[ ]", "vitesse"),
+                [(KL("Z"), "annuler"), (KL("M"), "muet"), ("← →", "±5 s"), (f'{KL("[")} {KL("]")}', "vitesse"),
                  ("Échap", "quitter highlight")],
             ],
         ]
@@ -785,7 +787,7 @@ class MainWindow(QMainWindow):
         self.rot_toggle.setObjectName("sectionToggle")
         self.rot_toggle.setCheckable(True)
         self.rot_toggle.setCursor(Qt.PointingHandCursor)
-        self.rot_toggle.setToolTip("Afficher / masquer la rotation (le raccourci R marche toujours)")
+        self.rot_toggle.setToolTip("Afficher / masquer la rotation (le raccourci " + KL("R") + " marche toujours)")
         self.rot_toggle.toggled.connect(self._set_rot_expanded)
         card_v.addWidget(self.rot_toggle)
         self.rot_body = QWidget()
@@ -812,7 +814,7 @@ class MainWindow(QMainWindow):
         rot_row.addWidget(rot_ctrl)
         cv.addLayout(rot_row)
 
-        self.rot_btn = QPushButton("Début de rotation  ·  R")
+        self.rot_btn = QPushButton(f"Début de rotation  ·  {KL('R')}")
         self._style_rot_btn("init")
         self.rot_btn.setToolTip(
             "Marque le début de l'intervalle à redresser, puis reclique (ou R) "
@@ -1066,18 +1068,19 @@ class MainWindow(QMainWindow):
     def eventFilter(self, obj: QObject, e: QEvent) -> bool:
         if e.type() == QEvent.Type.KeyPress and not e.isAutoRepeat():
             k  = e.key()
+            lk = keymap.logical_key(e)   # touche visée par son EMPLACEMENT (QWERTY/AZERTY…)
             # Une option à interrupteur atteinte au Tab garde Espace / Entrée
             # pour elle (cocher), au lieu de lancer la lecture.
             if (k in (Qt.Key.Key_Space, Qt.Key.Key_Return, Qt.Key.Key_Enter)
                     and isinstance(QApplication.focusWidget(), ToggleRow)):
                 return super().eventFilter(obj, e)
             if self._shortcuts_active():
-                if k == Qt.Key.Key_A:     self._add_point(1); return True
-                if k == Qt.Key.Key_S:     self._add_point(2); return True
-                if k == Qt.Key.Key_F:     self._add_serve_swap(); return True
-                if k == Qt.Key.Key_C and not self.is_cutting:
+                if lk == "A":     self._add_point(1); return True
+                if lk == "S":     self._add_point(2); return True
+                if lk == "F":     self._add_serve_swap(); return True
+                if lk == "C" and not self.is_cutting:
                                           self._start_cut(); return True
-                if k == Qt.Key.Key_Z:
+                if lk == "Z":
                     if e.modifiers() & Qt.KeyboardModifier.ShiftModifier:
                         self._redo()
                     else:
@@ -1092,8 +1095,8 @@ class MainWindow(QMainWindow):
                     if self._hl_review and shift:
                         self._hl_step(1); return True
                     self._seek(self.player.position() / 1000.0 + 5.0); return True
-                if k == Qt.Key.Key_I:     self._hl_decide(True);  return True
-                if k == Qt.Key.Key_N:     self._hl_decide(False); return True
+                if lk == "I":     self._hl_decide(True);  return True
+                if lk == "N":     self._hl_decide(False); return True
                 if self._hl_review:
                     if k == Qt.Key.Key_Space:  self._hl_replay(); return True
                     if k == Qt.Key.Key_Escape: self._hl_exit();   return True
@@ -1102,22 +1105,22 @@ class MainWindow(QMainWindow):
                     (self.player.pause() if st == QMediaPlayer.PlaybackState.PlayingState
                      else self.player.play())
                     return True
-                if k == Qt.Key.Key_M:
+                if lk == "M":
                     self._toggle_mute()
                     return True
-                if k == Qt.Key.Key_R:
+                if lk == "R":
                     self._toggle_rotation()
                     return True
-                if k == Qt.Key.Key_BracketLeft:
+                if lk == "[":
                     idx = self._speed_presets.index(self._playback_speed) if self._playback_speed in self._speed_presets else 3
                     self._set_speed(self._speed_presets[max(0, idx - 1)]); return True
-                if k == Qt.Key.Key_BracketRight:
+                if lk == "]":
                     idx = self._speed_presets.index(self._playback_speed) if self._playback_speed in self._speed_presets else 3
                     self._set_speed(self._speed_presets[min(len(self._speed_presets) - 1, idx + 1)]); return True
         if e.type() == QEvent.Type.KeyRelease and not e.isAutoRepeat():
             # Relâcher C ne concerne que la coupe en cours : sinon on laisse
             # passer l'évènement (un « c » tapé dans un dialogue).
-            if e.key() == Qt.Key.Key_C and self.is_cutting:
+            if keymap.logical_key(e) == "C" and self.is_cutting:
                 self._end_cut(); return True
         return super().eventFilter(obj, e)
 
@@ -1219,7 +1222,7 @@ class MainWindow(QMainWindow):
         if self.rot_start is None:
             self._set_rot_expanded(True)        # rotation en cours : on la montre
             self.rot_start = self.current_time
-            self.rot_btn.setText("⏹  Fin de rotation  (R)")
+            self.rot_btn.setText(f"⏹  Fin de rotation  ({KL('R')})")
             self._style_rot_btn("active")
             return
         start, self.rot_start = self.rot_start, None
@@ -1236,7 +1239,7 @@ class MainWindow(QMainWindow):
         self._add_rotation(start, self.duration)
 
     def _reset_rot_btn(self):
-        self.rot_btn.setText("↻  Début de rotation  (R)")
+        self.rot_btn.setText(f"↻  Début de rotation  ({KL('R')})")
         self._style_rot_btn("idle")
 
     def _style_rot_btn(self, state: str):
@@ -1725,7 +1728,7 @@ class MainWindow(QMainWindow):
                 "MODE HIGHLIGHT  ·  clique une séquence sur la timeline  ·  Échap quitter", "pending")
             return
         st = self._hl_status[self._hl_idx]
-        txt = f"SÉQUENCE {self._hl_idx + 1} / {n}  ·  I garder  ·  N jeter  ·  ⇧← ⇧→ naviguer"
+        txt = f"SÉQUENCE {self._hl_idx + 1} / {n}  ·  {KL('I')} garder  ·  {KL('N')} jeter  ·  ⇧← ⇧→ naviguer"
         state = "pending"
         if st is True:
             txt += "  ·  ✓ GARDÉE"; state = "keep"
