@@ -9,6 +9,18 @@ from pongedit.export import cards as _cards
 from pongedit.match.scoring import flips_before, server_at
 
 
+def _ffq(path) -> str:
+    """Chemin sûr DANS un graphe de filtres ffmpeg (entre apostrophes).
+
+    Sur Windows, `C:\\Users\\x\\a.png` casse le graphe : le « : » de « C: » est pris pour un
+    séparateur d'options (ffmpeg tentait d'ouvrir « C »). Il faut des « / » et un « : » échappé.
+    """
+    p = str(path)
+    if os.name == "nt":
+        p = p.replace("\\", "/")
+    return p.replace(":", "\\:").replace("'", "\\'")
+
+
 def _set_form(points, pi: int, set_idx: int) -> list[int]:
     """Vainqueurs (1/2) des 8 derniers points du match jusqu'au point `pi` inclus,
     sets confondus (la forme ne repart pas à zéro à chaque set). `set_idx` est
@@ -81,7 +93,7 @@ def _build_overlay_filter(points, duration, font_size, p1n, p2n, tmp_dir=None, f
     prev = "[0:v]"
 
     if has_pre:
-        safe = pre_png.replace("'", "\\'")
+        safe = _ffq(pre_png)
         lines.append(f"movie='{safe}'[imgpre];")
         lines.append(
             f"{prev}[imgpre]overlay=x={margin}:y=H-h-{margin}"
@@ -91,7 +103,7 @@ def _build_overlay_filter(points, duration, font_size, p1n, p2n, tmp_dir=None, f
         prev = "[vpre]"
 
     for pi, adj, show_until, png in pt_filters:
-        safe = png.replace("'", "\\'")
+        safe = _ffq(png)
         is_last = pi == len(pt_filters) - 1
         out = "[vout]" if is_last else f"[ov{pi}]"
         lines.append(f"movie='{safe}'[img{pi}];")
@@ -341,7 +353,7 @@ def _build_filter(
     prev = "[vcombined]"
 
     if has_pre:
-        safe = pre_png.replace("'", "\\'")
+        safe = _ffq(pre_png)
         lines.append(f"movie='{safe}'[imgpre];")
         lines.append(
             f"{prev}[imgpre]overlay=x={margin}:y=H-h-{margin}"
@@ -351,7 +363,7 @@ def _build_filter(
         prev = "[vpre]"
 
     for pi, adj, show_until, png in pt_filters:
-        safe    = png.replace("'", "\\'")
+        safe    = _ffq(png)
         is_last = pi == len(points) - 1
         out     = ("[vsc]" if anims else "[vout]") if is_last else f"[ov{pi}]"
         img_label = f"[img{pi}]"
@@ -387,7 +399,7 @@ def _build_filter(
         fr = Fraction(anim_fps).limit_denominator(1001)
         items = sorted(anims.items(), key=lambda kv: kv[1]["t0"])
         for k, (pi, an) in enumerate(items):
-            safe = an["pattern"].replace("'", "\\'")
+            safe = _ffq(an["pattern"])
             out = "[vout]" if k == len(items) - 1 else f"[sa{k}]"
             x = margin + an["x"]
             y = height - an["card_h"] - margin + an["y"]
@@ -418,7 +430,7 @@ def _build_filter(
                 bpath = os.path.join(tmp_dir, f"setpoint_{who}_{len(banners)}.tga")
                 banners[key] = (bpath, _make_setpoint_png(text, who, bpath, width, height))
             bpath, (_bw, bh) = banners[key]
-            safe = bpath.replace("'", "\\'")
+            safe = _ffq(bpath)
             y = height - margin - card_h - gap - bh
             fd = min(0.2, (t1 - t0) / 3)
             out = "[vout]" if k == len(sp_spans) - 1 else f"[bn{k}]"

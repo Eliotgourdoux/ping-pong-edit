@@ -63,5 +63,32 @@ class T(unittest.TestCase):
             for f in tmp: os.unlink(f)
 
 
+
+class CheminsDansLesFiltres(unittest.TestCase):
+    """Un chemin Windows (C:\\...) dans `movie='...'` faisait chercher à ffmpeg un fichier « C »."""
+
+    def test_echappement(self):
+        from pongedit.export.filters import _ffq
+        if os.name == "nt":
+            self.assertEqual(_ffq(r"C:\Users\Eliot\a b.png"), "C\\:/Users/Eliot/a b.png")
+        self.assertEqual(_ffq("/tmp/a.png"), "/tmp/a.png")
+        self.assertEqual(_ffq("/tmp/it's.png"), "/tmp/it\\'s.png")
+
+    def test_ffmpeg_reel_ouvre_une_image_via_movie(self):
+        """Vrai ffmpeg : le chemin échappé par _ffq est bien lu par le filtre movie."""
+        from pongedit.export.filters import _ffq
+        d = tempfile.mkdtemp()
+        png = os.path.join(d, "carte.png")
+        subprocess.run(["ffmpeg", "-y", "-v", "error", "-f", "lavfi", "-i", "color=c=red:s=64x64:d=0.1",
+                        "-frames:v", "1", png], check=True)
+        out = os.path.join(d, "o.mp4")
+        graph = f"movie='{_ffq(png)}'[img];[0:v][img]overlay=10:10[vout]"
+        r = subprocess.run(["ffmpeg", "-y", "-v", "error", "-f", "lavfi", "-i", "testsrc2=s=320x180:r=10:d=0.5",
+                            "-filter_complex", graph, "-map", "[vout]", "-c:v", "libx264", out],
+                           capture_output=True, text=True)
+        self.assertEqual(r.returncode, 0, r.stderr[-300:])
+        self.assertGreater(os.path.getsize(out), 0)
+
+
 if __name__ == "__main__":
     unittest.main()

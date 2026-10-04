@@ -1,5 +1,11 @@
 # Journal des changements
 
+## 1.1.6 — 2026-10-04
+- **Export sur Windows réparé de bout en bout** (erreur « FFmpeg fail ») : les chemins Windows (`C:\…`) dans le graphe de montage, y compris ceux du score, sont maintenant correctement échappés pour ffmpeg.
+- **Repli automatique sur le processeur** : si la carte graphique refuse l'encodage ou le décodage, l'export est relancé tout seul sur le processeur au lieu d'échouer.
+- **Plus d'erreur d'affichage** du journal sur Windows (caractères spéciaux dans la console).
+- Testé sur Windows avec un extrait de 20 s : export complet, fichier HEVC 1080p lisible de bout en bout. Le chemin carte graphique (NVIDIA/Intel) n'a pas pu être testé à distance.
+
 ## 1.1.5 — 2026-10-04
 - **Plus jamais de perte de l'historique** : les sessions (points, noms, coupes, classements) étaient rangées dans le dossier de la version installée, donc chaque mise à jour repartait d'un dossier vide (perdu en passant de 1.1.3 à 1.1.4). Elles sont maintenant dans un dossier permanent (`%APPDATA%\PingPongEdit\sessions` sur Windows). Les sessions des versions précédentes sont récupérées automatiquement au lancement, et sauvegardées avant tout nettoyage d'une ancienne version.
 

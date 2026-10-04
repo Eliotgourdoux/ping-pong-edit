@@ -117,6 +117,38 @@ def _fit_command_line(cmd: list[str]) -> tuple[list[str], list[str]]:
     return out, tmp
 
 
+# ── Repli automatique quand le matériel graphique échoue ──────────────────────
+# Une carte détectée au test peut échouer au vrai montage (pilote, session sans accès au GPU,
+# trop de sessions NVENC ouvertes…). Mieux vaut un export plus lent qu'un export raté.
+
+_HW_FAIL = re.compile(
+    r"Failed to create [^\n]*device|Device creation failed|\[(?:DXVA2|d3d11va|cuda|qsv|vaapi)[^\]]*\][^\n]*(?:Failed|failed|error)|"
+    r"Cannot load nvcuda|OpenEncodeSession|Error while opening encoder|Could not open encoder|"
+    r"No device available|Failed to initiali[sz]e|MFX[^\n]*(?:err|fail)|"
+    r"Impossible[^\n]*(?:périphérique|device)|hwaccel[^\n]*(?:fail|error|not)",
+    re.IGNORECASE)
+
+
+def _hw_failure(stderr_text: str) -> bool:
+    """Le message d'erreur parle-t-il d'un échec du matériel graphique ?
+
+    Seules les dernières lignes comptent : le début de la sortie de ffmpeg est un bandeau de
+    configuration qui cite « cuda », « amf », « qsv »… sans qu'il y ait la moindre erreur."""
+    tail = "\n".join((stderr_text or "").splitlines()[-40:])
+    return bool(_HW_FAIL.search(tail))
+
+
+def _strip_hwaccel(args: list[str]) -> list[str]:
+    """Retire `-hwaccel <valeur>` (décodage logiciel)."""
+    out, i = [], 0
+    while i < len(args):
+        if args[i] == "-hwaccel" and i + 1 < len(args):
+            i += 2
+        else:
+            out.append(args[i]); i += 1
+    return out
+
+
 def _run_ffmpeg_with_progress(cmd: list[str], progress_cb, total_seconds: float | None = None,
                               on_start=None) -> tuple[int, str]:
     cmd, _tmp_files = _fit_command_line(cmd)
@@ -207,7 +239,7 @@ BITRATE_HEADROOM = 1.25
 
 def _max_quality_video_args(video_path: str | None = None, *,
                             width: int | None = None, height: int | None = None,
-                            fps: float | None = None) -> list[str]:
+                            fps: float | None = None, software: bool = False) -> list[str]:
     """Args vidéo de l'export, calés dynamiquement sur la source.
 
     Le débit de sortie reprend celui de la source (borné par le débit par pixel),
@@ -237,7 +269,7 @@ def _max_quality_video_args(video_path: str | None = None, *,
     if props.get("color_space"):
         color_tags += ["-colorspace", props["color_space"]]
 
-    enc = _hw_encoder(ten_bit)
+    enc = None if software else _hw_encoder(ten_bit)
     maxrate, bufsize = str(int(target * 1.5)), str(int(target * 3))
     profile = "main10" if ten_bit else "main"
     pixfmt = "yuv420p10le" if ten_bit else "yuv420p"

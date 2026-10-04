@@ -6,7 +6,8 @@ from PySide6.QtCore import QThread, Signal
 
 from pongedit.utils import EXPORTS_DIR, _get_fps, _get_video_dimensions, _reserve_output_path
 from pongedit.match.scoring import _compute_stats_from_dicts
-from pongedit.export.encoding import _max_quality_video_args, _run_ffmpeg_with_progress, _hwaccel_args
+from pongedit.export.encoding import (_max_quality_video_args, _run_ffmpeg_with_progress, _hwaccel_args,
+                                      _hw_failure, _strip_hwaccel)
 from pongedit.export.segments import _adjusted_time, _build_kept_segments, _kept_duration
 from pongedit.export.cards import _is_hlg_source, _make_stats_card_png, _scorecard_margin
 from pongedit.export.filters import _build_filter
@@ -350,20 +351,24 @@ class ExportWorker(QThread):
             self.stage.emit("⚙️  Initialisation du rendu vidéo…")
             self.progress.emit(prep_progress)
 
-            cmd = [
-                "ffmpeg", "-y",
-                "-threads", "0",
-                "-progress", "pipe:1", "-nostats",
-                *seg_inputs,
-                *extra_inputs,
-                "-filter_complex", fc,
-                "-map", "[vout]",
-                "-map", "[aout]",
-                *_max_quality_video_args(self.video_path),
-                "-c:a", "aac",
-                "-b:a", "320k",
-                output,
-            ]
+            def _make_cmd(software: bool) -> list[str]:
+                """`software` : décodage ET encodage sur le processeur (repli sans matériel)."""
+                return [
+                    "ffmpeg", "-y",
+                    "-threads", "0",
+                    "-progress", "pipe:1", "-nostats",
+                    *(_strip_hwaccel(seg_inputs) if software else seg_inputs),
+                    *extra_inputs,
+                    "-filter_complex", fc,
+                    "-map", "[vout]",
+                    "-map", "[aout]",
+                    *_max_quality_video_args(self.video_path, software=software),
+                    "-c:a", "aac",
+                    "-b:a", "320k",
+                    output,
+                ]
+
+            cmd = _make_cmd(False)
 
             progress_start = prep_progress
             progress_span = 94
@@ -385,6 +390,18 @@ class ExportWorker(QThread):
                 total_seconds=kept_duration + lead,
                 on_start=lambda p: setattr(self, "_proc", p),
             )
+            if rc != 0 and not self._cancelled and _hw_failure(stderr_text):
+                # Le matériel graphique a échoué en cours de route : on recommence sur le
+                # processeur plutôt que de rendre un export raté.
+                print("Matériel graphique indisponible pour cet export : nouvel essai sur le processeur.")
+                self.stage.emit("⚙️  Carte graphique indisponible, rendu sur le processeur…")
+                progress_start = prep_progress
+                rc, stderr_text = _run_ffmpeg_with_progress(
+                    _make_cmd(True),
+                    _cb,
+                    total_seconds=kept_duration + lead,
+                    on_start=lambda p: setattr(self, "_proc", p),
+                )
 
             if self._cancelled:
                 Path(output).unlink(missing_ok=True)  # retire le fichier partiel

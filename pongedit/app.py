@@ -27,6 +27,14 @@ def _deferred_orphan_cleanup():
 
 
 def main():
+    # Un message de journal avec un caractère que la console ne sait pas écrire (emoji, flèche
+    # sur Windows en cp1252) ne doit JAMAIS faire planter l'app, surtout pas au milieu d'un
+    # export en échec où il masquerait la vraie erreur.
+    for _s in (sys.stdout, sys.stderr):
+        try:
+            _s.reconfigure(errors="replace")
+        except Exception:
+            pass
     app = QApplication(sys.argv)
     app.setApplicationName("Ping Pong Edit")
 
