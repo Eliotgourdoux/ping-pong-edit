@@ -45,6 +45,32 @@ CURRENT_FILE = UPDATES_DIR / "current.json"      # {"version": "1.2.0", "path": 
 CHECK_FILE = UPDATES_DIR / "last_check.json"     # {"ts": 1234.5}
 
 
+def sessions_dir() -> Path:
+    """Dossier PERMANENT des sessions (points, noms, coupes) : indépendant de la version."""
+    return data_dir() / "sessions"
+
+
+def migrate_sessions(dest: Path, sources) -> int:
+    """Copie dans `dest` les sessions trouvées dans `sources` (le plus récent l'emporte).
+
+    Ne supprime jamais rien. Retourne le nombre de fichiers copiés."""
+    n = 0
+    try:
+        dest.mkdir(parents=True, exist_ok=True)
+        for src in sources:
+            src = Path(src)
+            if not src.is_dir() or src.resolve() == dest.resolve():
+                continue
+            for f in src.glob("*.json"):
+                target = dest / f.name
+                if not target.exists() or f.stat().st_mtime > target.stat().st_mtime:
+                    shutil.copy2(f, target)
+                    n += 1
+    except Exception as e:
+        print(f"Migration des sessions: {e}")
+    return n
+
+
 def parse_version(v: str) -> tuple:
     """'v1.2.3' → (1, 2, 3). Les suffixes non numériques sont ignorés."""
     out = []
@@ -160,6 +186,7 @@ def check_and_download(force: bool = False):
         old = sorted([p for p in UPDATES_DIR.iterdir() if p.is_dir() and not p.name.endswith(".part")],
                      key=lambda p: parse_version(p.name), reverse=True)
         for p in old[2:]:
+            migrate_sessions(sessions_dir(), [p / "sessions"])   # jamais de perte à la suppression
             shutil.rmtree(p, ignore_errors=True)
         LAST_STATE = "installed"
         return tag.lstrip("vV")

@@ -1,5 +1,8 @@
 # Journal des changements
 
+## 1.1.5 — 2026-10-04
+- **Plus jamais de perte de l'historique** : les sessions (points, noms, coupes, classements) étaient rangées dans le dossier de la version installée, donc chaque mise à jour repartait d'un dossier vide (perdu en passant de 1.1.3 à 1.1.4). Elles sont maintenant dans un dossier permanent (`%APPDATA%\PingPongEdit\sessions` sur Windows). Les sessions des versions précédentes sont récupérées automatiquement au lancement, et sauvegardées avant tout nettoyage d'une ancienne version.
+
 ## 1.1.4 — 2026-10-04
 - **Export sur Windows réparé** (erreur « [WinError 206] nom de fichier ou extension trop long ») : un montage avec beaucoup de points et de coupes produit une commande ffmpeg plus longue que ce que Windows accepte. Le graphe de montage est maintenant lu depuis un fichier temporaire. Testé sur Windows avec une commande de plus de 50 000 caractères.
 - **Carte graphique NVIDIA utilisable** : l'installeur embarque une version stable de ffmpeg (8.1) qui accepte les pilotes NVIDIA courants (la version précédente exigeait un pilote 610+ et retombait sur l'encodeur Intel).

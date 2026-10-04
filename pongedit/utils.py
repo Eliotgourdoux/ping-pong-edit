@@ -25,7 +25,25 @@ INSTANCE_SLOT = _resolve_slot()
 EXPORTS_DIR     = Path.home() / "Desktop" / "pong_exports"
 # Les sessions restent partagées : elles sont indexées par hash de la vidéo, donc
 # une fenêtre qui édite un autre match écrit dans un autre fichier — pas de collision.
-SESSIONS_DIR    = PROJECT_DIR / "sessions"
+def _pick_sessions_dir() -> Path:
+    """Installé (.exe/.app) ou lancé depuis une mise à jour : le dossier du programme change
+    à CHAQUE version, donc les sessions vont dans le dossier de données de l'utilisateur.
+    En développement (dossier du projet), on garde `sessions/` à côté du code."""
+    import sys
+    from pongedit import updater
+    in_updates = str(PROJECT_DIR).startswith(str(updater.UPDATES_DIR))
+    if getattr(sys, "frozen", False) or in_updates:
+        dest = updater.sessions_dir()
+        # Récupère les sessions laissées dans les dossiers de versions et dans le programme.
+        sources = [PROJECT_DIR / "sessions", dest.parent / "sessions_sauvegarde",
+                   *sorted(updater.UPDATES_DIR.glob("*/sessions"))] if updater.UPDATES_DIR.exists() \
+            else [PROJECT_DIR / "sessions", dest.parent / "sessions_sauvegarde"]
+        updater.migrate_sessions(dest, sources)
+        return dest
+    return PROJECT_DIR / "sessions"
+
+
+SESSIONS_DIR    = _pick_sessions_dir()
 
 
 def _atomic_write_text(path: Path, text: str) -> None:
