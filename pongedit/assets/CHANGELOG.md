@@ -1,5 +1,9 @@
 # Journal des changements
 
+## 1.1.7 — 2026-10-04
+- **Polices cohérentes sur Windows** : les accents (« terminé »), les tirets (« 3–0 ») et la typographie des incrustations étaient cassés car Windows n'a ni Helvetica ni DIN. L'app embarque maintenant la police Barlow (licence libre OFL), identique sur tous les PC. Sur Mac, rien ne change.
+- **Journal de performance de l'export** (`%APPDATA%\PingPongEdit\logs\export.log`) : matériel détecté, encodeur choisi, charge processeur/carte graphique, images par seconde et vitesse, raison d'un éventuel repli sur le processeur.
+
 ## 1.1.6 — 2026-10-04
 - **Export sur Windows réparé de bout en bout** (erreur « FFmpeg fail ») : les chemins Windows (`C:\…`) dans le graphe de montage, y compris ceux du score, sont maintenant correctement échappés pour ffmpeg.
 - **Repli automatique sur le processeur** : si la carte graphique refuse l'encodage ou le décodage, l'export est relancé tout seul sur le processeur au lieu d'échouer.

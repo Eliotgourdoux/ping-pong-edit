@@ -72,6 +72,8 @@ class ExportWorker(QThread):
 
     def run(self):
         tmp_dir = tempfile.mkdtemp(prefix="pong_export_")
+        from pongedit.export import diag
+        diag.reset()
         # Incrustations converties en HLG si la source l'est (cf. _ov_save).
         _cards._OV_HLG = _is_hlg_source(self.video_path)
         try:
@@ -368,7 +370,14 @@ class ExportWorker(QThread):
                     output,
                 ]
 
+            from pongedit.export import diag
+            diag.start_session(self.video_path, kept_duration)
             cmd = _make_cmd(False)
+            try:
+                diag.log("Commande : " + " ".join(cmd[:cmd.index("-filter_complex")])[:400] + " ... "
+                         + " ".join(cmd[cmd.index("-map"):])[:400])
+            except Exception:
+                pass
 
             progress_start = prep_progress
             progress_span = 94
@@ -384,24 +393,29 @@ class ExportWorker(QThread):
                 self.progress.emit(min(99.9, progress_start + ratio * progress_span))
                 self.encode_started.emit()
 
-            rc, stderr_text = _run_ffmpeg_with_progress(
-                cmd,
-                _cb,
-                total_seconds=kept_duration + lead,
-                on_start=lambda p: setattr(self, "_proc", p),
-            )
+            with diag.Sampler("carte graphique si disponible"):
+                rc, stderr_text = _run_ffmpeg_with_progress(
+                    cmd,
+                    _cb,
+                    total_seconds=kept_duration + lead,
+                    on_start=lambda p: setattr(self, "_proc", p),
+                )
+            diag.log_decoder_summary(stderr_text)
             if rc != 0 and not self._cancelled and _hw_failure(stderr_text):
                 # Le matériel graphique a échoué en cours de route : on recommence sur le
                 # processeur plutôt que de rendre un export raté.
                 print("Matériel graphique indisponible pour cet export : nouvel essai sur le processeur.")
                 self.stage.emit("⚙️  Carte graphique indisponible, rendu sur le processeur…")
                 progress_start = prep_progress
-                rc, stderr_text = _run_ffmpeg_with_progress(
-                    _make_cmd(True),
-                    _cb,
-                    total_seconds=kept_duration + lead,
-                    on_start=lambda p: setattr(self, "_proc", p),
-                )
+                diag.log("Echec materiel (derniere sortie ffmpeg) : "
+                         + " | ".join(stderr_text.strip().splitlines()[-6:])[:700])
+                with diag.Sampler("processeur seul"):
+                    rc, stderr_text = _run_ffmpeg_with_progress(
+                        _make_cmd(True),
+                        _cb,
+                        total_seconds=kept_duration + lead,
+                        on_start=lambda p: setattr(self, "_proc", p),
+                    )
 
             if self._cancelled:
                 Path(output).unlink(missing_ok=True)  # retire le fichier partiel

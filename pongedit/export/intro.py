@@ -188,6 +188,9 @@ def zoom_expr(lead: float, tv: str = "t") -> str:
 def _hn(size: int, index: int):
     """Helvetica Neue, graisse choisie (0 regular, 1 bold, 10 medium)."""
     from PIL import ImageFont
+    b = _cards.bundled_font({1: "Barlow-Bold", 10: "Barlow-Medium"}.get(index, "Barlow-Regular"))
+    if b:
+        return _cards._load_font(b, size)
     p = _cards._find_label_font()
     try:
         if p and p.endswith(".ttc"):

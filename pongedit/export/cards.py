@@ -1,6 +1,6 @@
 """Incrustations Pillow : vignette de score, carte de stats."""
 
-import os, math
+import os, math, sys
 from functools import lru_cache
 
 from pongedit.utils import _probe_video_props
@@ -339,8 +339,24 @@ def _make_stats_card_png(stats: dict, p1n: str, p2n: str, path: str, W: int, H: 
 
 # ── FFmpeg / Pillow export ─────────────────────────────────────────────────────
 
+FONT_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "assets", "fonts")
+
+
+def bundled_font(name: str) -> str | None:
+    """Police livrée avec l'app (Barlow, licence OFL) : même rendu partout.
+
+    Sur Mac on garde les polices du système ; Windows/Linux n'ont ni Helvetica ni DIN,
+    et Pillow retombait sur une police de secours sans accents ni tiret."""
+    if sys.platform == "darwin":
+        return None
+    p = os.path.join(FONT_DIR, name + ".ttf")
+    return p if os.path.exists(p) else None
+
+
 @lru_cache(maxsize=1)
 def _find_font() -> str | None:
+    b = bundled_font("Barlow-Regular")
+    if b: return b
     for p in [
         "/System/Library/Fonts/Helvetica.ttc",
         "/System/Library/Fonts/Menlo.ttc",
@@ -358,6 +374,8 @@ def _find_display_font() -> str | None:
     Une grotesque condensée (DIN) tient deux fois plus de chiffres à hauteur
     égale qu'une Helvetica, ce qui laisse grossir le score courant sans faire
     déborder la vignette — c'est la typo du graphisme sportif télé."""
+    b = bundled_font("BarlowCondensed-Bold")
+    if b: return b
     for p in [
         "/System/Library/Fonts/Supplemental/DIN Condensed Bold.ttf",
         "/System/Library/Fonts/Avenir Next Condensed.ttc",
@@ -498,6 +516,8 @@ def _ov_tint(f: float, bg_alpha: int = OV_BG_A) -> tuple[int, int, int, int]:
 @lru_cache(maxsize=1)
 def _find_label_font() -> str | None:
     """Police des libellés (texte courant) : une grotesque normale, lisible en petit."""
+    b = bundled_font("Barlow-Medium")
+    if b: return b
     for p in [
         "/System/Library/Fonts/HelveticaNeue.ttc",
         "/System/Library/Fonts/Helvetica.ttc",

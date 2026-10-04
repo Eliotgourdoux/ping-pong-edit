@@ -53,7 +53,15 @@ def _hw_encoder(ten_bit: bool) -> str | None:
     """Nom de l'encodeur matériel HEVC utilisable ici (ou None → logiciel)."""
     key = bool(ten_bit)
     if key not in _HW_CACHE:
-        _HW_CACHE[key] = next((n for n in _hw_candidates() if _probe_encoder(n, ten_bit)), None)
+        def _try(n):
+            ok = _probe_encoder(n, ten_bit)
+            try:
+                from pongedit.export import diag
+                diag.log_probe(n, ok, ten_bit)
+            except Exception:
+                pass
+            return ok
+        _HW_CACHE[key] = next((n for n in _hw_candidates() if _try(n)), None)
         print(f"Encodeur vidéo ({'10' if ten_bit else '8'} bits) : {_HW_CACHE[key] or 'logiciel (libx265)'}")
     return _HW_CACHE[key]
 
@@ -192,6 +200,19 @@ def _run_ffmpeg_with_progress_inner(cmd, progress_cb, total_seconds, on_start):
                 pass
         elif line.startswith("progress=") and line.endswith("end"):
             progress_cb(1.0)
+        elif line.startswith(("fps=", "speed=")):
+            k, v = line.split("=", 1)
+            try:
+                from pongedit.export import diag
+                diag.LIVE[k] = v.strip()
+            except Exception:
+                pass
+        if line.startswith("out_time="):
+            try:
+                from pongedit.export import diag
+                diag.LIVE["out_time"] = line.split("=", 1)[1][:11]
+            except Exception:
+                pass
 
     proc.wait()
     t.join(timeout=3)
