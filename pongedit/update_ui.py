@@ -89,7 +89,7 @@ def manual_check(win, button=None):
 # ── Menu de la version : À propos, notes, vérification ────────────────────────
 
 AUTHOR = "Eliot Gourdoux"
-REPO_URL = "https://github.com/Eliotgourdoux/ping-pong-edit"
+REPO_URL = "https://github.com/Eliotgourdoux/ping-pong-edit-releases"
 
 
 def _asset(name: str) -> str:

@@ -14,7 +14,8 @@ import zipfile
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent
-REPO = "Eliotgourdoux/ping-pong-edit"
+REPO = "Eliotgourdoux/ping-pong-edit"                    # PRIVÉ : code source + construction
+PUBLIC_REPO = "Eliotgourdoux/ping-pong-edit-releases"    # PUBLIC : uniquement les téléchargements
 
 
 def _changelog_notes(version: str) -> str:
@@ -69,7 +70,32 @@ def main():
     else:
         subprocess.run(["gh", "release", "create", f"v{version}", str(zpath), str(sha),
                         "--repo", REPO, "--title", f"v{version}", "--notes", notes], check=True)
-    print(f"Release v{version} publiée.")
+    print(f"Release v{version} publiée (dépôt privé). Copie vers le dépôt public…")
+    mirror_to_public(version, notes, dist, zpath, sha)
+
+
+def mirror_to_public(version: str, notes: str, dist: Path, zpath: Path, sha: Path):
+    """Attend l'installeur construit par GitHub Actions, puis publie les 3 fichiers dans le
+    dépôt public (le dépôt du code reste privé : aucune archive « Source code » exposée)."""
+    import time
+    exe_name = f"PingPongEdit-Setup-{version}.exe"
+    exe = dist / exe_name
+    for _ in range(90):                                   # ≤ 15 min
+        names = subprocess.run(["gh", "release", "view", f"v{version}", "--repo", REPO, "--json",
+                                "assets", "-q", ".assets[].name"], capture_output=True, text=True).stdout.split()
+        if exe_name in names:
+            break
+        time.sleep(10)
+    else:
+        sys.exit(f"L'installeur {exe_name} n'est pas apparu : relance la copie à la main.")
+    exe.unlink(missing_ok=True)
+    subprocess.run(["gh", "release", "download", f"v{version}", "--repo", REPO, "--pattern", exe_name,
+                    "--dir", str(dist)], check=True)
+    subprocess.run(["gh", "release", "delete", f"v{version}", "--repo", PUBLIC_REPO, "--yes",
+                    "--cleanup-tag"], capture_output=True)
+    subprocess.run(["gh", "release", "create", f"v{version}", str(exe), str(zpath), str(sha),
+                    "--repo", PUBLIC_REPO, "--title", f"v{version}", "--notes", notes], check=True)
+    print(f"Release v{version} publiée sur {PUBLIC_REPO}.")
 
 
 if __name__ == "__main__":

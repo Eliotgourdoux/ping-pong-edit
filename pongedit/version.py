@@ -2,5 +2,6 @@
 
 VERSION = "1.1.8"
 
-# Dépôt GitHub public : code source + releases (l'app y cherche les mises à jour).
-UPDATE_REPO = "Eliotgourdoux/ping-pong-edit"
+# Dépôt GitHub PUBLIC réservé aux téléchargements (installeur + paquet de mise à jour) ;
+# le code source vit dans un dépôt privé.
+UPDATE_REPO = "Eliotgourdoux/ping-pong-edit-releases"
