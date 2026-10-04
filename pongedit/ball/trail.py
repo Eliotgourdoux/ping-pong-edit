@@ -1,19 +1,22 @@
 """Traînée de balle : lancement du pipeline externe (TrailWorker)."""
 
-import os, subprocess, threading, re, time, signal
+import os, subprocess, sys, threading, re, time, signal
 from pathlib import Path
 from PySide6.QtCore import QThread, Signal
 
 from pongedit.utils import EXPORTS_DIR, _reserve_output_path
+from pongedit.ball import envsetup
 
 
 # ── Traînée de balle ──────────────────────────────────────────────────────────
-# Le calcul vit hors de l'app (~/Documents/Playground/ball_trail2.py : réseau
-# BlurBall + trajectoire). On le lance en sous-processus et on lit ses lignes
-# « PROGRESS <phase> <fait> <total> » pour alimenter la barre.
-TRAIL_DIR    = Path.home() / "Documents" / "Playground"
+# Le calcul (réseau BlurBall + trajectoire) est livré avec l'app dans `engine/`
+# (ball_trail2.py, blurball_infer.py, poids du réseau). On le lance en sous-processus,
+# avec l'environnement Python de `envsetup` (torch n'est pas dans l'exécutable), et on lit
+# ses lignes « PROGRESS <phase> <fait> <total> » pour alimenter la barre.
+TRAIL_DIR    = Path(__file__).resolve().parent / "engine"
 TRAIL_SCRIPT = TRAIL_DIR / "ball_trail2.py"
-TRAIL_PYTHON = TRAIL_DIR / ".venv" / "bin" / "python"
+TRAIL_PYTHON = envsetup.trail_python()
+IS_MAC       = sys.platform == "darwin"
 TRAIL_CACHE  = EXPORTS_DIR / ".trail_cache"
 # Part de chaque passe dans la barre : la détection neuronale domine largement
 # (~0,18 s/frame), le suivi est rapide. Le rendu garde sa tranche pour le
@@ -51,8 +54,12 @@ class TrailWorker(QThread):
         self._cancelled = True
         p = self._proc
         if p is not None and p.poll() is None:
-            try:                       # le groupe : ball_trail2 + son ffmpeg
-                os.killpg(os.getpgid(p.pid), signal.SIGTERM)
+            try:                       # tout l'arbre : ball_trail2 + blurball_infer + ffmpeg
+                if sys.platform.startswith("win"):
+                    subprocess.run(["taskkill", "/T", "/F", "/PID", str(p.pid)],
+                                   capture_output=True, creationflags=0x08000000)
+                else:
+                    os.killpg(os.getpgid(p.pid), signal.SIGTERM)
             except OSError:
                 pass
 
@@ -94,7 +101,11 @@ class TrailWorker(QThread):
         """
         self._proc = subprocess.Popen(
             cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
-            text=True, bufsize=1, cwd=cwd, start_new_session=True)
+            text=True, encoding="utf-8", errors="replace", bufsize=1, cwd=cwd,
+            # Windows : la console est en cp1252, or le script écrit des « → » / accents.
+            env={**os.environ, "PYTHONIOENCODING": "utf-8", "PYTHONUTF8": "1"},
+            **({"creationflags": 0x08000000} if sys.platform.startswith("win")
+               else {"start_new_session": True}))
         tail = []
         self._last_out = time.monotonic()
         watchdog = threading.Thread(target=self._watch_stall, daemon=True)
@@ -126,17 +137,34 @@ class TrailWorker(QThread):
             output = str(_reserve_output_path(EXPORTS_DIR / f"{self.out_name}.mp4"))
             key = self._cache_key()
 
-            self.machine.emit("Mac · GPU Apple")
-            if not TRAIL_SCRIPT.exists() or not TRAIL_PYTHON.exists():
-                self.error.emit(f"Traînée : script introuvable ({TRAIL_SCRIPT}).")
+            self.machine.emit("Mac · GPU Apple" if IS_MAC else "PC · Windows")
+            if not TRAIL_SCRIPT.exists():
+                self.error.emit(f"Traînée : module introuvable ({TRAIL_SCRIPT}). "
+                                "Réinstalle l'app (le dossier du module est manquant).")
                 return
+            py = envsetup.trail_python()
+            if not py.exists():
+                # Première utilisation : environnement Python + torch, une seule fois.
+                self.stage.emit("📦  Première traînée : installation du module (plusieurs Go, une seule fois)…")
+                self.progress.emit(0)
+                setup_log = []
+                def _log(line: str):
+                    setup_log.append(line)
+                    print("[module traînée]", line, flush=True)
+                    self.stage.emit("📦  Installation du module de traînée… " + line[:70])
+                ok, msg = envsetup.install(_log)
+                if not ok:
+                    self.error.emit("Installation du module de traînée impossible : " + msg
+                                    + "\n" + "\n".join(setup_log[-8:]))
+                    return
+                py = envsetup.trail_python()
             # `videotoolbox` : l'encodeur matériel du M4. L'encodage logiciel
             # (libx264) rajoutait des dizaines de secondes de CPU par minute de
             # 4K, pendant lesquelles la puce chauffait et ralentissait la passe
             # suivante — le matériel le fait à froid.
-            cmd = [str(TRAIL_PYTHON), "-u", str(TRAIL_SCRIPT),
+            cmd = [str(py), "-u", str(TRAIL_SCRIPT),
                    "--input", self.video_path, "--output", output,
-                   "--encoder", "videotoolbox", "--style", "comet",
+                   "--encoder", "videotoolbox" if IS_MAC else "x264", "--style", "comet",
                    "--dets", str(TRAIL_CACHE / f"{key}_dets.json"),
                    "--cache", str(TRAIL_CACHE / f"{key}_traj.json")]
             self.stage.emit(TRAIL_LABELS["det"])
@@ -148,7 +176,7 @@ class TrailWorker(QThread):
                 return
             if rc != 0:
                 Path(output).unlink(missing_ok=True)
-                print("── Traînée ──\n", "".join(tail))
+                print("-- Trainee --\n", "".join(tail).encode("ascii", "replace").decode())
                 self.error.emit("Traînée : échec.\n" + "".join(tail)[-1200:])
                 return
             self.progress.emit(100.0)

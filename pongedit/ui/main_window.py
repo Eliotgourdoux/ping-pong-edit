@@ -1,6 +1,6 @@
 """Fenêtre principale."""
 
-import math, os, tempfile, shutil, re, json, time
+import math, os, sys, tempfile, shutil, re, json, time
 from pathlib import Path
 from PySide6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QPushButton,
@@ -1594,6 +1594,8 @@ class MainWindow(QMainWindow):
 
     def _trail_hint_text(self) -> str:
         """Sous-titre de l'option traînée : durée de calcul estimée (~2× le montage)."""
+        if sys.platform != "darwin":      # l'estimation ci-dessous est mesurée sur puce Apple
+            return "Comète TV · calcul long (1ʳᵉ fois : installation du module, plusieurs Go)"
         dur = getattr(self, "duration", 0.0) or 0.0
         if not getattr(self, "video_path", None) or dur <= 0:
             return "Comète TV · calcul ≈ 2× le film"

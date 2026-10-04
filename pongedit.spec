@@ -12,7 +12,8 @@ def _skip(p):
 # Le code de l'app est livré en fichiers (pas dans l'exécutable) → PyInstaller ne voit pas
 # ses imports : on les déclare explicitement en lisant le code.
 hidden = set()
-sources = [ROOT / "pong_edit.py", *(p for p in (ROOT / "pongedit").rglob("*.py") if not _skip(p))]
+sources = [ROOT / "pong_edit.py", *(p for p in (ROOT / "pongedit").rglob("*.py")
+                                          if not _skip(p) and "engine" not in p.parts)]
 for src in sources:
     for node in ast.walk(ast.parse(src.read_text(encoding="utf-8"))):
         if isinstance(node, ast.Import):

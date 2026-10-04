@@ -1,6 +1,7 @@
 # Journal des changements
 
 ## 1.1.8 — 2026-10-04
+- **Traînée de balle sur Windows** : le module (réseau BlurBall, scripts et poids) est maintenant livré avec l'app au lieu d'être cherché dans un dossier du Mac (`Documents/Playground`, d'où l'erreur « script introuvable »). À la première traînée, l'app installe seule son environnement Python + torch (carte NVIDIA détectée automatiquement, plusieurs Go, une seule fois). Testé sur Windows avec un extrait de 20 s.
 - **Tableau de stats** : suppression des « +N » (plus grande avance de chaque joueur) à gauche de la courbe de dynamique, peu lisibles et peu utiles.
 
 ## 1.1.7 — 2026-10-04
