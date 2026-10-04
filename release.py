@@ -70,8 +70,7 @@ def main():
     else:
         subprocess.run(["gh", "release", "create", f"v{version}", str(zpath), str(sha),
                         "--repo", REPO, "--title", f"v{version}", "--notes", notes], check=True)
-    print(f"Release v{version} publiée (dépôt privé). Copie vers le dépôt public…")
-    mirror_to_public(version, notes, dist, zpath, sha)
+    print(f"Release v{version} publiée.")
 
 
 def mirror_to_public(version: str, notes: str, dist: Path, zpath: Path, sha: Path):
