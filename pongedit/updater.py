@@ -22,8 +22,11 @@ from pathlib import Path
 from .version import UPDATE_REPO, VERSION
 
 API_LATEST = f"https://api.github.com/repos/{UPDATE_REPO}/releases/latest"
-CHECK_EVERY_SEC = 6 * 3600
+CHECK_EVERY_SEC = 120   # évite seulement de marteler GitHub quand on ouvre plusieurs fenêtres
 HTTP_TIMEOUT = 8
+
+# Résultat du dernier contrôle : "uptodate" | "installed" | "error" | "skipped"
+LAST_STATE = "skipped"
 
 
 def data_dir() -> Path:
@@ -90,8 +93,11 @@ def check_and_download(force: bool = False):
     Retourne la nouvelle version (str) si une mise à jour vient d'être installée,
     sinon None. Ne lève jamais : une panne réseau ou GitHub ne doit pas gêner l'app.
     """
+    global LAST_STATE
+    LAST_STATE = "error"
     try:
         if not force and _recently_checked():
+            LAST_STATE = "skipped"
             return None
         UPDATES_DIR.mkdir(parents=True, exist_ok=True)
         release = json.loads(_get(API_LATEST))
@@ -107,6 +113,7 @@ def check_and_download(force: bool = False):
         except Exception:
             pass
         if not tag or not is_newer(tag, running):
+            LAST_STATE = "uptodate"
             return None
 
         assets = {a["name"]: a["browser_download_url"] for a in release.get("assets", [])}
@@ -152,6 +159,7 @@ def check_and_download(force: bool = False):
                      key=lambda p: parse_version(p.name), reverse=True)
         for p in old[2:]:
             shutil.rmtree(p, ignore_errors=True)
+        LAST_STATE = "installed"
         return tag.lstrip("vV")
     except Exception as e:
         print(f"Mise à jour: {e}")

@@ -322,11 +322,14 @@ class ToggleRow(QCheckBox):
 
 # ── Main window ───────────────────────────────────────────────────────────────
 
+from pongedit.version import VERSION as APP_VERSION
+
+
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle(
-            "Ping Pong Live Edit 🏓"
+            f"Ping Pong Live Edit 🏓  v{APP_VERSION}"
             + ("" if INSTANCE_SLOT == "1" else f" — fenêtre {INSTANCE_SLOT}")
         )
         self.resize(1200, 720)
@@ -471,6 +474,12 @@ class MainWindow(QMainWindow):
         self.hl_btn.clicked.connect(self._hl_toggle)
         tbl.addWidget(self.hl_btn)
         tbl.addStretch()
+        self.version_btn = QPushButton(f"v{APP_VERSION}")
+        self.version_btn.setProperty("variant", "toolbar")
+        self.version_btn.setToolTip("Version installée — cliquer pour vérifier les mises à jour")
+        self.version_btn.setCursor(Qt.PointingHandCursor)
+        self.version_btn.clicked.connect(self._check_updates)
+        tbl.addWidget(self.version_btn)
         self.theme_btn = QPushButton()
         self.theme_btn.setProperty("variant", "toolbar")
         self.theme_btn.setCursor(Qt.PointingHandCursor)
@@ -494,7 +503,7 @@ class MainWindow(QMainWindow):
         tbl.addWidget(self.speed_lbl)
         # Même gabarit pour tout le haut : 34 px, centré verticalement.
         for w_ in (self.open_btn, self.history_combo, self.new_win_btn, self.merge_btn,
-                   self.hl_btn, self.theme_btn, self.mute_btn, self.speed_lbl):
+                   self.hl_btn, self.version_btn, self.theme_btn, self.mute_btn, self.speed_lbl):
             w_.setFixedHeight(34)
         tbl.setAlignment(Qt.AlignVCenter)
         lv.addWidget(tb)
@@ -2240,6 +2249,10 @@ class MainWindow(QMainWindow):
 
         dlg.finished.connect(_finished)
         dlg.show(); dlg.raise_(); dlg.activateWindow()
+
+    def _check_updates(self):
+        from pongedit import update_ui
+        update_ui.manual_check(self, self.version_btn)
 
     def _open_new_window(self):
         try:

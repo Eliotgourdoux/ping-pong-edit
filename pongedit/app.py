@@ -26,55 +26,6 @@ def _deferred_orphan_cleanup():
         print(f"Nettoyage orphelins: {e}")
 
 
-def _restart():
-    """Relance l'app (même emplacement de fenêtre) puis ferme celle-ci."""
-    import os
-    import subprocess
-    from pongedit.utils import INSTANCE_SLOT
-    cmd = [sys.executable] if getattr(sys, "frozen", False) else [sys.executable, os.path.abspath(sys.argv[0])]
-    cmd += ["--slot", str(INSTANCE_SLOT)]
-    QApplication.instance().aboutToQuit.connect(lambda: subprocess.Popen(cmd, start_new_session=True))
-    QApplication.quit()
-
-
-def _start_update_check(win):
-    """Cherche une mise à jour sans bloquer l'interface ; prévient si une est prête."""
-    import threading
-    from PySide6.QtWidgets import QMessageBox
-    from pongedit import updater
-
-    result = {}
-
-    def work():
-        result["v"] = updater.check_and_download()
-
-    t = threading.Thread(target=work, daemon=True)
-    t.start()
-
-    def poll():
-        if t.is_alive():
-            return
-        timer.stop()
-        v = result.get("v")
-        if v:
-            box = QMessageBox(win)
-            box.setWindowTitle("Mise à jour")
-            box.setIcon(QMessageBox.Information)
-            box.setText(f"La version {v} est prête.")
-            box.setInformativeText("Redémarrer maintenant pour l'utiliser ?\n"
-                                   "(Sinon, elle sera utilisée au prochain lancement.)")
-            box.setStandardButtons(QMessageBox.Yes | QMessageBox.No)
-            box.setDefaultButton(QMessageBox.Yes)
-            box.button(QMessageBox.Yes).setText("Redémarrer")
-            box.button(QMessageBox.No).setText("Plus tard")
-            box.finished.connect(lambda r: _restart() if r == QMessageBox.Yes else None)
-            box.open()
-
-    timer = QTimer(win)
-    timer.timeout.connect(poll)
-    timer.start(500)
-
-
 def main():
     app = QApplication(sys.argv)
     app.setApplicationName("Ping Pong Edit")
@@ -118,7 +69,8 @@ def main():
 
         _nsapp.setApplicationIconImage_(_img)
     except Exception as _e:
-        print(f"Dock icon: {_e}")
+        if sys.platform == "darwin":
+            print(f"Dock icon: {_e}")
 
     # Thème : suit macOS (Dark / Light), y compris à chaud via System Settings →
     # Appearance. La palette doit être posée AVANT de construire la fenêtre.
@@ -141,5 +93,6 @@ def main():
     win.show()
     # Différé : la fenêtre apparaît ~150 ms plus tôt, le nettoyage se fait juste après.
     QTimer.singleShot(0, _deferred_orphan_cleanup)
-    _start_update_check(win)
+    from pongedit import update_ui
+    update_ui.start_background_check(win)
     sys.exit(app.exec())
