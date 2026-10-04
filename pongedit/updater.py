@@ -27,6 +27,7 @@ HTTP_TIMEOUT = 8
 
 # Résultat du dernier contrôle : "uptodate" | "installed" | "error" | "skipped"
 LAST_STATE = "skipped"
+LAST_NOTES = ""      # notes de la release qui vient d'être installée
 
 
 def data_dir() -> Path:
@@ -93,7 +94,7 @@ def check_and_download(force: bool = False):
     Retourne la nouvelle version (str) si une mise à jour vient d'être installée,
     sinon None. Ne lève jamais : une panne réseau ou GitHub ne doit pas gêner l'app.
     """
-    global LAST_STATE
+    global LAST_STATE, LAST_NOTES
     LAST_STATE = "error"
     try:
         if not force and _recently_checked():
@@ -151,7 +152,8 @@ def check_and_download(force: bool = False):
 
         # Bascule atomique : current.json n'est écrit qu'une fois le dossier complet.
         cur_tmp = CURRENT_FILE.with_suffix(".tmp")
-        cur_tmp.write_text(json.dumps({"version": tag.lstrip("vV"), "path": str(dest)}))
+        LAST_NOTES = (release.get("body") or "").strip()
+        cur_tmp.write_text(json.dumps({"version": tag.lstrip("vV"), "path": str(dest), "notes": LAST_NOTES}))
         cur_tmp.replace(CURRENT_FILE)
 
         # Ménage : on garde la nouvelle et la précédente (retour arrière possible).

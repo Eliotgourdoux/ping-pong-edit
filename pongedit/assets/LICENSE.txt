@@ -1,0 +1,17 @@
+Ping Pong Edit
+Copyright (c) 2026 Eliot Gourdoux. Tous droits réservés.
+
+L'application peut être utilisée gratuitement, à titre personnel et non commercial.
+Toute copie, modification, redistribution, revente, ou réutilisation du code ou de
+l'application — en tout ou en partie — nécessite l'accord écrit préalable de l'auteur.
+Le nom de l'auteur et cette mention doivent être conservés.
+
+Contact : https://github.com/Eliotgourdoux
+
+--------------------------------------------------------------------------------
+Copyright (c) 2026 Eliot Gourdoux. All rights reserved.
+
+The application may be used free of charge for personal, non-commercial purposes.
+Copying, modifying, redistributing, selling or reusing the code or the application,
+in whole or in part, requires the prior written permission of the author.
+The author's name and this notice must be preserved.

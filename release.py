@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Publie une version : zip du package + empreinte SHA-256 + release GitHub.
 
-Usage : python3 release.py 1.1.0 "notes de version"
+Usage : python3 release.py 1.1.3   (notes lues dans pongedit/assets/CHANGELOG.md)
 
 L'app installée télécharge `pongedit-<version>.zip` (et vérifie `.sha256`) au prochain
 lancement. Incrémente automatiquement pongedit/version.py.
@@ -17,10 +17,28 @@ ROOT = Path(__file__).resolve().parent
 REPO = "Eliotgourdoux/ping-pong-edit"
 
 
+def _changelog_notes(version: str) -> str:
+    """Section `## <version> — …` de CHANGELOG.md : c'est le texte de la release GitHub."""
+    out, take = [], False
+    for line in (ROOT / "pongedit" / "assets" / "CHANGELOG.md").read_text(encoding="utf-8").splitlines():
+        if line.startswith("## "):
+            if take:
+                break
+            take = line[3:].split("—")[0].strip() == version
+            continue
+        if take:
+            out.append(line)
+    return "\n".join(out).strip()
+
+
 def main():
     if len(sys.argv) < 2 or not re.fullmatch(r"\d+\.\d+\.\d+", sys.argv[1]):
-        sys.exit("usage: release.py X.Y.Z [notes]")
-    version, notes = sys.argv[1], (sys.argv[2] if len(sys.argv) > 2 else f"Version {sys.argv[1]}")
+        sys.exit("usage: release.py X.Y.Z")
+    version = sys.argv[1]
+    notes = _changelog_notes(version)
+    if not notes:
+        sys.exit(f"Écris d'abord les notes de {version} dans pongedit/assets/CHANGELOG.md "
+                 f"(section « ## {version} — date »).")
 
     vfile = ROOT / "pongedit" / "version.py"
     vfile.write_text(re.sub(r'VERSION = "[^"]*"', f'VERSION = "{version}"', vfile.read_text()))

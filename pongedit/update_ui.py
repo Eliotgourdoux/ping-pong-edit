@@ -5,7 +5,7 @@ import subprocess
 import sys
 import threading
 
-from PySide6.QtCore import QTimer
+from PySide6.QtCore import Qt, QTimer
 from PySide6.QtWidgets import QApplication, QMessageBox
 
 from pongedit import updater
@@ -28,6 +28,8 @@ def _ask_restart(win, version):
     box.setText(f"La version {version} est prête.")
     box.setInformativeText("Redémarrer maintenant pour l'utiliser ?\n"
                            "(Sinon, elle sera utilisée au prochain lancement.)")
+    if updater.LAST_NOTES:
+        box.setDetailedText(updater.LAST_NOTES)      # bouton « Afficher les détails… »
     box.setStandardButtons(QMessageBox.Yes | QMessageBox.No)
     box.setDefaultButton(QMessageBox.Yes)
     box.button(QMessageBox.Yes).setText("Redémarrer")
@@ -82,3 +84,68 @@ def manual_check(win, button=None):
                                 "ou GitHub ne répond pas).\nRéessayez plus tard.")
 
     _run_check(win, True, done)
+
+
+# ── Menu de la version : À propos, notes, vérification ────────────────────────
+
+AUTHOR = "Eliot Gourdoux"
+REPO_URL = "https://github.com/Eliotgourdoux/ping-pong-edit"
+
+
+def _asset(name: str) -> str:
+    from pathlib import Path
+    p = Path(__file__).parent / "assets" / name
+    try:
+        return p.read_text(encoding="utf-8")
+    except Exception:
+        return ""
+
+
+def _changelog_section(version: str) -> str:
+    """Notes de la version `version` d'après CHANGELOG.md ('' si absentes)."""
+    out, take = [], False
+    for line in _asset("CHANGELOG.md").splitlines():
+        if line.startswith("## "):
+            if take:
+                break
+            take = line[3:].split("—")[0].strip() == version
+            continue
+        if take:
+            out.append(line)
+    return "\n".join(out).strip()
+
+
+def show_about(win):
+    box = QMessageBox(win)
+    box.setWindowTitle("À propos")
+    box.setIcon(QMessageBox.NoIcon)
+    box.setTextFormat(Qt.TextFormat.RichText)
+    box.setText(
+        f"<h3>Ping Pong Edit 🏓</h3>"
+        f"<p>Version {VERSION}</p>"
+        f"<p>Créé par <b>{AUTHOR}</b><br>© 2026 {AUTHOR}. Tous droits réservés.</p>"
+        f"<p><a href=\"{REPO_URL}\">{REPO_URL}</a></p>"
+    )
+    box.setDetailedText(_asset("LICENSE.txt"))
+    box.exec()
+
+
+def show_notes(win):
+    notes = _changelog_section(VERSION) or "Aucune note pour cette version."
+    box = QMessageBox(win)
+    box.setWindowTitle(f"Nouveautés de la version {VERSION}")
+    box.setIcon(QMessageBox.NoIcon)
+    box.setTextFormat(Qt.TextFormat.MarkdownText)
+    box.setText(f"### Version {VERSION}\n\n{notes}")
+    box.exec()
+
+
+def version_menu(win, button):
+    """Menu ouvert par le bouton « vX.Y.Z »."""
+    from PySide6.QtWidgets import QMenu
+    m = QMenu(win)
+    m.addAction("À propos de Ping Pong Edit…", lambda: show_about(win))
+    m.addAction("Notes de cette version…", lambda: show_notes(win))
+    m.addSeparator()
+    m.addAction("Vérifier les mises à jour", lambda: manual_check(win, button))
+    m.exec(button.mapToGlobal(button.rect().bottomLeft()))

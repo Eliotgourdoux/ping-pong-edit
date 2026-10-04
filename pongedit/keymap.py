@@ -1,12 +1,14 @@
 """Raccourcis clavier indépendants de la disposition (QWERTY / AZERTY / QWERTZ).
 
-L'app a été pensée pour un QWERTY : A et S côte à côte pour les points, Z juste en dessous
-pour annuler, [ et ] côte à côte pour la vitesse. Sur un AZERTY, viser la LETTRE disperse ces
-touches. On vise donc la POSITION physique de la touche (son code matériel), et on affiche à
-l'écran la lettre réellement gravée à cet endroit sur le clavier de l'utilisateur.
+L'app a été pensée pour un QWERTY : A et S côte à côte pour les points, C juste en dessous
+pour couper. Sur un AZERTY, viser la LETTRE disperse ces trois touches (le A est en haut à
+gauche). Elles suivent donc la POSITION physique de la touche, et l'écran affiche la lettre
+réellement gravée à cet endroit sur le clavier de l'utilisateur.
 
-Identifiants logiques = la lettre QWERTY à cet emplacement : "A", "S", "C", "F", "Z", "R",
-"M", "I", "N", "[" et "]".
+Tous les autres raccourcis (F, Z, R, M, I, N) restent des LETTRES, sur toutes les dispositions ;
+la vitesse utilise les flèches haut / bas.
+
+Identifiants logiques : "A", "S", "C" (positionnels) et "F", "Z", "R", "M", "I", "N" (lettres).
 """
 
 import subprocess
@@ -14,27 +16,26 @@ import sys
 
 from PySide6.QtCore import Qt
 
-# identifiant → (code Windows, code macOS, code Linux/X11)
+# Touches positionnelles : identifiant → (code Windows, code macOS, code Linux/X11)
 _PHYS = {
-    "A": (0x1E, 0, 38),   "S": (0x1F, 1, 39),   "C": (0x2E, 8, 54),   "F": (0x21, 3, 41),
-    "Z": (0x2C, 6, 52),   "R": (0x13, 15, 27),  "M": (0x32, 46, 58),  "I": (0x17, 34, 31),
-    "N": (0x31, 45, 57),  "[": (0x1A, 33, 34),  "]": (0x1B, 30, 35),
+    "A": (0x1E, 0, 38),   "S": (0x1F, 1, 39),   "C": (0x2E, 8, 54),
 }
+_POSITIONAL = tuple(_PHYS)
 _COL = 0 if sys.platform.startswith("win") else (1 if sys.platform == "darwin" else 2)
 _BY_CODE = {v[_COL]: k for k, v in _PHYS.items()}
 
-# Repli quand le système ne fournit pas le code matériel (ou en QWERTY) : on vise la lettre.
+# Identifiant logique d'après la lettre produite (toutes dispositions).
 _BY_QTKEY = {
     Qt.Key.Key_A: "A", Qt.Key.Key_S: "S", Qt.Key.Key_C: "C", Qt.Key.Key_F: "F",
     Qt.Key.Key_Z: "Z", Qt.Key.Key_R: "R", Qt.Key.Key_M: "M", Qt.Key.Key_I: "I",
-    Qt.Key.Key_N: "N", Qt.Key.Key_BracketLeft: "[", Qt.Key.Key_BracketRight: "]",
+    Qt.Key.Key_N: "N",
 }
 
-# Lettre gravée à l'emplacement QWERTY, selon la famille de clavier.
+# Lettre gravée à l'emplacement QWERTY de A / S / C, selon la famille de clavier.
 _LABELS = {
     "qwerty": {},
-    "azerty": {"A": "Q", "Z": "W", "M": ",", "[": "^", "]": "$"},
-    "qwertz": {"Z": "Y"},
+    "azerty": {"A": "Q"},
+    "qwertz": {},
 }
 
 _family: str | None = None
@@ -89,31 +90,39 @@ def family() -> str:
     return _family
 
 
-def _char_of(qt_key: int) -> str:
-    if qt_key in (Qt.Key.Key_Dead_Circumflex, Qt.Key.Key_AsciiCircum):
-        return "^"
-    return chr(qt_key).upper() if 0x20 < int(qt_key) < 0x7F else ""
-
-
-def logical_key(event) -> str | None:
-    """Identifiant logique de la touche pressée ("A", "S", …) ou None.
-
-    QWERTY : on se fie à la lettre (comportement historique, inchangé).
-    Autre disposition : on se fie à l'EMPLACEMENT physique (code matériel) ; à défaut de code,
-    on retrouve l'emplacement à partir du caractère produit (sur AZERTY, l'emplacement du A
-    produit « Q »). Une lettre qui n'est PAS à un emplacement connu ne déclenche rien — sinon
-    la vraie lettre A, en haut à gauche d'un AZERTY, lancerait « point J1 » en plus de la
-    touche voisine de S.
-    """
-    fam = family()
-    if fam == "qwerty":
-        return _BY_QTKEY.get(event.key())
+def _positional(event, fam: str) -> str | None:
+    """A / S / C d'après l'EMPLACEMENT (code matériel, sinon caractère produit)."""
     sc = event.nativeScanCode()
     if sc:
         return _BY_CODE.get(sc)
+    # Pas de code matériel (ou macOS, où la touche A vaut 0) : on retrouve l'emplacement
+    # à partir du caractère produit — sur AZERTY, l'emplacement du A produit « Q ».
     labels = _LABELS[fam]
-    inverse = {labels.get(k, k): k for k in _PHYS}
-    return inverse.get(_char_of(event.key()))
+    inverse = {labels.get(k, k): k for k in _POSITIONAL}
+    qk = event.key()
+    ch = chr(qk).upper() if 0x20 < int(qk) < 0x7F else ""
+    return inverse.get(ch)
+
+
+def logical_key(event) -> str | None:
+    """Identifiant logique de la touche pressée ("A", "S", "C", "F", "Z", …) ou None.
+
+    QWERTY : on se fie à la lettre (comportement historique, inchangé).
+    Autre disposition : A / S / C suivent la position physique ; une lettre A, S ou C qui n'est
+    PAS à cet emplacement ne déclenche rien (la vraie lettre A, en haut à gauche d'un AZERTY,
+    lancerait sinon « point J1 » en plus de la touche voisine de S). Les autres raccourcis
+    restent des lettres.
+    """
+    letter = _BY_QTKEY.get(event.key())
+    fam = family()
+    if fam == "qwerty":
+        return letter
+    pos = _positional(event, fam)
+    if pos:
+        return pos
+    if letter in _POSITIONAL:
+        return None
+    return letter
 
 
 def label(logical: str) -> str:

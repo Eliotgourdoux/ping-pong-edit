@@ -8,6 +8,7 @@ AppId={{6F1B7C2E-3A4D-4E8B-9C55-1A2B3C4D5E6F}
 AppName=Ping Pong Edit
 AppVersion={#AppVersion}
 AppPublisher=Eliot Gourdoux
+AppCopyright=Copyright (c) 2026 Eliot Gourdoux. Tous droits réservés.
 DefaultDirName={localappdata}\Programs\Ping Pong Edit
 DefaultGroupName=Ping Pong Edit
 PrivilegesRequired=lowest

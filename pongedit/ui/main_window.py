@@ -478,7 +478,7 @@ class MainWindow(QMainWindow):
         tbl.addStretch()
         self.version_btn = QPushButton(f"v{APP_VERSION}")
         self.version_btn.setProperty("variant", "toolbar")
-        self.version_btn.setToolTip("Version installée — cliquer pour vérifier les mises à jour")
+        self.version_btn.setToolTip("Version installée — À propos, notes de version, mises à jour")
         self.version_btn.setCursor(Qt.PointingHandCursor)
         self.version_btn.clicked.connect(self._check_updates)
         tbl.addWidget(self.version_btn)
@@ -498,7 +498,7 @@ class MainWindow(QMainWindow):
         tbl.addWidget(self.mute_btn)
         self.speed_lbl = QLabel("1×")
         self.speed_lbl.setObjectName("badge")
-        self.speed_lbl.setToolTip(f"Vitesse de lecture  ( {KL('[')} ralentir · {KL(']')} accélérer )")
+        self.speed_lbl.setToolTip("Vitesse de lecture  ( ↓ ralentir · ↑ accélérer )")
         self.speed_lbl.setAlignment(Qt.AlignCenter)
         self.speed_lbl.setMinimumWidth(58)
         self.speed_lbl.setFixedHeight(34)
@@ -522,14 +522,14 @@ class MainWindow(QMainWindow):
         hint_pages = [
             [   # montage
                 [(KL("A"), "point J1"), (KL("S"), "point J2"), (KL("C"), "couper (tenir)"),
-                 (KL("F"), "changer service"), (KL("R"), "rotation"), (f'{KL("[")} {KL("]")}', "vitesse")],
+                 (KL("F"), "changer service"), (KL("R"), "rotation"), ("↑ ↓", "vitesse")],
                 [(KL("Z"), "annuler"), ("⇧" + KL("Z"), "rétablir"), ("Espace", "lecture / pause"),
                  (KL("M"), "muet"), ("← →", "±5 s")],
             ],
             [   # mode highlight
                 [(KL("I"), "garder séquence"), (KL("N"), "jeter séquence"),
                  ("Espace", "revoir séquence"), ("⇧← ⇧→", "séq. préc. / suiv.")],
-                [(KL("Z"), "annuler"), (KL("M"), "muet"), ("← →", "±5 s"), (f'{KL("[")} {KL("]")}', "vitesse"),
+                [(KL("Z"), "annuler"), (KL("M"), "muet"), ("← →", "±5 s"), ("↑ ↓", "vitesse"),
                  ("Échap", "quitter highlight")],
             ],
         ]
@@ -1065,9 +1065,46 @@ class MainWindow(QMainWindow):
         return not isinstance(fw, (QLineEdit, QAbstractSpinBox, QTextEdit, QPlainTextEdit)) and not (
             isinstance(fw, QComboBox) and fw.isEditable())
 
+    _INPUT_TYPES = (QLineEdit, QAbstractSpinBox, QTextEdit, QPlainTextEdit)
+
+    def _focused_input(self):
+        """Le champ de saisie qui a le focus dans CETTE fenêtre (hors dialogue), sinon None."""
+        if QApplication.activeModalWidget() is not None or QApplication.activeWindow() is not self:
+            return None
+        fw = QApplication.focusWidget()
+        if isinstance(fw, self._INPUT_TYPES) or (isinstance(fw, QComboBox) and fw.isEditable()):
+            return fw
+        return None
+
+    def _leave_field_on_enter(self) -> bool:
+        """Entrée valide la saisie et REND LE FOCUS à la fenêtre : les raccourcis (A, S, F…)
+        redeviennent actifs au lieu d'écrire des lettres dans le champ."""
+        fw = self._focused_input()
+        if fw is None or isinstance(fw, (QTextEdit, QPlainTextEdit)):   # Entrée = saut de ligne
+            return False
+        fw.clearFocus()          # déclenche editingFinished : la valeur est prise en compte
+        self.setFocus(Qt.FocusReason.OtherFocusReason)
+        return True
+
+    def _release_focus_on_outside_click(self, e):
+        """Un clic en dehors du champ en cours de saisie libère le focus (sinon il restait
+        collé jusqu'à ce qu'on clique sur un autre champ ou bouton précis)."""
+        fw = self._focused_input()
+        if fw is None:
+            return
+        w = QApplication.widgetAt(e.globalPosition().toPoint())
+        while w is not None:
+            if w is fw or isinstance(w, self._INPUT_TYPES):
+                return
+            w = w.parentWidget()
+        fw.clearFocus()
+        self.setFocus(Qt.FocusReason.OtherFocusReason)
+
     def eventFilter(self, obj: QObject, e: QEvent) -> bool:
         if e.type() == QEvent.Type.KeyPress and not e.isAutoRepeat():
             k  = e.key()
+            if k in (Qt.Key.Key_Return, Qt.Key.Key_Enter) and self._leave_field_on_enter():
+                return True
             lk = keymap.logical_key(e)   # touche visée par son EMPLACEMENT (QWERTY/AZERTY…)
             # Une option à interrupteur atteinte au Tab garde Espace / Entrée
             # pour elle (cocher), au lieu de lancer la lecture.
@@ -1111,12 +1148,14 @@ class MainWindow(QMainWindow):
                 if lk == "R":
                     self._toggle_rotation()
                     return True
-                if lk == "[":
+                if k == Qt.Key.Key_Down:
                     idx = self._speed_presets.index(self._playback_speed) if self._playback_speed in self._speed_presets else 3
                     self._set_speed(self._speed_presets[max(0, idx - 1)]); return True
-                if lk == "]":
+                if k == Qt.Key.Key_Up:
                     idx = self._speed_presets.index(self._playback_speed) if self._playback_speed in self._speed_presets else 3
                     self._set_speed(self._speed_presets[min(len(self._speed_presets) - 1, idx + 1)]); return True
+        if e.type() == QEvent.Type.MouseButtonPress:
+            self._release_focus_on_outside_click(e)
         if e.type() == QEvent.Type.KeyRelease and not e.isAutoRepeat():
             # Relâcher C ne concerne que la coupe en cours : sinon on laisse
             # passer l'évènement (un « c » tapé dans un dialogue).
@@ -2255,7 +2294,7 @@ class MainWindow(QMainWindow):
 
     def _check_updates(self):
         from pongedit import update_ui
-        update_ui.manual_check(self, self.version_btn)
+        update_ui.version_menu(self, self.version_btn)
 
     def _open_new_window(self):
         try:
