@@ -1,5 +1,8 @@
 # Journal des changements
 
+## 1.1.8 — 2026-10-04
+- **Tableau de stats** : suppression des « +N » (plus grande avance de chaque joueur) à gauche de la courbe de dynamique, peu lisibles et peu utiles.
+
 ## 1.1.7 — 2026-10-04
 - **Polices cohérentes sur Windows** : les accents (« terminé »), les tirets (« 3–0 ») et la typographie des incrustations étaient cassés car Windows n'a ni Helvetica ni DIN. L'app embarque maintenant la police Barlow (licence libre OFL), identique sur tous les PC. Sur Mac, rien ne change.
 - **Journal de performance de l'export** (`%APPDATA%\PingPongEdit\logs\export.log`) : matériel détecté, encodeur choisi, charge processeur/carte graphique, images par seconde et vitesse, raison d'un éventuel repli sur le processeur.

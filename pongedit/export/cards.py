@@ -253,7 +253,7 @@ def _make_stats_card_png(stats: dict, p1n: str, p2n: str, path: str, W: int, H: 
 
         # ── Dynamique du match : écart de points au fil de chaque set ─────
         # Rectangle du tracé (bords pairs, cf. anim) ; les libellés (S1 + score
-        # du set au-dessus, plus grandes avances à gauche) restent HORS du
+        # du set au-dessus) restent HORS du
         # rectangle : l'animation ne redessine que la courbe.
         if series:
             y += U(12)
@@ -285,15 +285,6 @@ def _make_stats_card_png(stats: dict, p1n: str, p2n: str, path: str, W: int, H: 
                 sx_ = xs + _text_w(f"S{i + 1}", f_ms) + U(7)
                 ops.append(lambda d, sx_=sx_, yy=ry, t=f"{sp1}-{sp2}", col=col: d.text(
                     (sx_, yy - U(3)), t, font=f_msc, fill=(*col, 255), anchor="ls"))
-            # Plus grande avance de chacun, à sa hauteur réelle (rien si jamais devant).
-            y_zero = ry + pad_y + ph * top / (top + bot)
-            unit = ph / (top + bot)
-            lead1 = max(max(s_) for s_ in series)
-            lead2 = max(-min(s_) for s_ in series)
-            for lead, sgn, col in ((lead1, -1, OV_P1), (lead2, 1, OV_P2)):
-                if lead > 0:
-                    ops.append(lambda d, yy=y_zero + sgn * lead * unit, t=f"+{lead}", col=col: d.text(
-                        (rx - U(3), yy), t, font=f_ax, fill=(*col, 255), anchor="rm"))
             mgeo.update(rect=(rx, ry, rw, rh), pad=(pad_x, pad_y), u=u)
             y = ry + rh
 
