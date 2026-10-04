@@ -95,4 +95,8 @@ def main():
     QTimer.singleShot(0, _deferred_orphan_cleanup)
     from pongedit import update_ui
     update_ui.start_background_check(win)
+    if sys.platform.startswith("win"):
+        import threading
+        from pongedit import winshell
+        threading.Thread(target=winshell.refresh_shortcut_icons, daemon=True).start()
     sys.exit(app.exec())

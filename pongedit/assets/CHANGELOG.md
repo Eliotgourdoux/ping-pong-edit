@@ -1,5 +1,12 @@
 # Journal des changements
 
+## 1.1.4 — 2026-10-04
+- **Export sur Windows réparé** (erreur « [WinError 206] nom de fichier ou extension trop long ») : un montage avec beaucoup de points et de coupes produit une commande ffmpeg plus longue que ce que Windows accepte. Le graphe de montage est maintenant lu depuis un fichier temporaire. Testé sur Windows avec une commande de plus de 50 000 caractères.
+- **Carte graphique NVIDIA utilisable** : l'installeur embarque une version stable de ffmpeg (8.1) qui accepte les pilotes NVIDIA courants (la version précédente exigeait un pilote 610+ et retombait sur l'encodeur Intel).
+- **Icône raquette partout** : les raccourcis du Bureau et du menu Démarrer sont corrigés automatiquement (ils gardaient l'icône par défaut des anciennes versions).
+- **Panneau des actions** : défilement de haut en bas uniquement, plus de glissement latéral ; police des temps adaptée à Windows.
+- **Barre d'outils** : le bouton « Ouvrir » a la même hauteur que les autres boutons (34 px au lieu de 38 px).
+
 ## 1.1.3 — 2026-10-04
 - **Entrée quitte le champ** : après avoir saisi un nom, un classement, un point ou le nom du fichier, Entrée valide et rend le focus à la fenêtre, donc les raccourcis marchent tout de suite. Un clic en dehors du champ libère aussi le focus.
 - **Vitesse de lecture sur les flèches ↑ / ↓** (plus de crochets, introuvables sur AZERTY).

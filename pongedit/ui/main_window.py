@@ -433,6 +433,7 @@ class MainWindow(QMainWindow):
         tbl.addWidget(brand)
         btn = self.open_btn = QPushButton("Ouvrir une vidéo")
         btn.setProperty("variant", "primary")
+        btn.setProperty("inToolbar", True)   # même hauteur (34 px) que le reste de la barre
         btn.setToolTip("Choisir un fichier vidéo à monter")
         btn.setCursor(Qt.PointingHandCursor)
         btn.clicked.connect(self._open_file)
@@ -647,6 +648,11 @@ class MainWindow(QMainWindow):
         self.action_list.setItemDelegate(ActionDelegate(self.action_list))
         self.action_list.setMouseTracking(True)
         self.action_list.setVerticalScrollMode(QListWidget.ScrollPerPixel)
+        # Défilement de haut en bas uniquement : jamais de glissement latéral.
+        self.action_list.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        self.action_list.setHorizontalScrollMode(QListWidget.ScrollPerPixel)
+        self.action_list.setTextElideMode(Qt.TextElideMode.ElideRight)
+        self.action_list.setWordWrap(False)
         cv.addWidget(self.action_list, 1)
 
         self.action_list.currentItemChanged.connect(self._seek_to_action)
@@ -2661,6 +2667,9 @@ class MainWindow(QMainWindow):
                 background:{UI['accent']}; color:{UI['on_accent']}; border:none;
                 font-weight:700; padding:9px 16px;
             }}
+            /* Bouton bleu dans la barre d'outils : sa marge verticale de 9 px le rendait
+               plus haut (38 px) que ses voisins (34 px). */
+            QPushButton[variant="primary"][inToolbar="true"] {{ padding:0 16px; }}
             QPushButton[variant="primary"]:hover    {{ background:{UI['accent_hover']}; }}
             QPushButton[variant="primary"]:pressed  {{ background:{UI['accent_pressed']}; }}
             QPushButton[variant="primary"]:disabled {{ background:{UI['accent_dis_bg']}; color:{UI['accent_dis_fg']}; }}

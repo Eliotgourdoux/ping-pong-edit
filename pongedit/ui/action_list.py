@@ -19,7 +19,11 @@ class ActionDelegate(QStyledItemDelegate):
     ROW_H = 46
 
     def sizeHint(self, option, index):
-        return QSize(option.rect.width(), self.ROW_H)
+        # Largeur = celle de la zone visible : une ligne plus large que la liste faisait
+        # apparaître un défilement horizontal. Les textes sont déjà tronqués (« … »).
+        view = self.parent()
+        w = view.viewport().width() if view is not None and hasattr(view, "viewport") else option.rect.width()
+        return QSize(max(1, w), self.ROW_H)
 
     def paint(self, p: QPainter, option, index):
         p.save()
@@ -43,7 +47,7 @@ class ActionDelegate(QStyledItemDelegate):
             p.setPen(Qt.NoPen); p.setBrush(col); p.drawEllipse(QRectF(cx - 5, cy - 5, 10, 10))
 
         # Temps à droite (mono)
-        tfont = QFont("Menlo"); tfont.setPixelSize(11); tfont.setStyleHint(QFont.Monospace)
+        tfont = QFont(); tfont.setFamilies(["Menlo", "Consolas", "Courier New"]); tfont.setPixelSize(11); tfont.setStyleHint(QFont.Monospace)
         p.setFont(tfont); p.setPen(QColor(UI["muted"]))
         tr = QRectF(r.left() + 36, r.top(), r.width() - 48, r.height())
         p.drawText(tr, Qt.AlignRight | Qt.AlignVCenter, index.data(ROLE_TIME) or "")

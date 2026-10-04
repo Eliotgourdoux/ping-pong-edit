@@ -1,6 +1,6 @@
 """Encodage ffmpeg : VideoToolbox, débit, progression."""
 
-import os, subprocess, sys, threading
+import os, re, subprocess, sys, tempfile, threading
 
 from pongedit.utils import _probe_video_props
 
@@ -64,8 +64,73 @@ def _hwaccel_args() -> list[str]:
     return ["-hwaccel", "videotoolbox" if sys.platform == "darwin" else "auto"]
 
 
+# ── Commande trop longue (Windows : WinError 206) ─────────────────────────────
+# Windows refuse de lancer un programme dont la ligne de commande dépasse 32 767 caractères.
+# Un montage avec beaucoup de points et de coupes produit un graphe de filtres bien plus
+# long : on le dépose dans un fichier temporaire que ffmpeg lit lui-même.
+
+CMD_LIMIT = 24000        # marge sous les 32 767 de CreateProcess
+_FFMPEG_MAJOR: int | None = None
+
+
+def _ffmpeg_major() -> int:
+    """Version majeure de ffmpeg (builds « git / master » = très récents → 99)."""
+    global _FFMPEG_MAJOR
+    if _FFMPEG_MAJOR is None:
+        try:
+            out = subprocess.run(["ffmpeg", "-version"], capture_output=True, text=True,
+                                 timeout=8,
+                                 creationflags=0x08000000 if sys.platform.startswith("win") else 0).stdout
+            m = re.search(r"version n?(\d+)\.", out.splitlines()[0])
+            _FFMPEG_MAJOR = int(m.group(1)) if m else 99
+        except Exception:
+            _FFMPEG_MAJOR = 99
+    return _FFMPEG_MAJOR
+
+
+def _fit_command_line(cmd: list[str]) -> tuple[list[str], list[str]]:
+    """Retourne (commande utilisable, fichiers temporaires à supprimer ensuite).
+
+    Sans effet tant que la ligne reste courte (toujours le cas sur Mac/Linux, où la limite
+    est de plusieurs Mo). Sinon, chaque `-filter_complex <graphe>` devient un fichier :
+    `-/filter_complex` (ffmpeg ≥ 7) ou `-filter_complex_script` (plus ancien).
+    """
+    if len(subprocess.list2cmdline(cmd)) <= CMD_LIMIT:
+        return cmd, []
+    flag = "-/filter_complex" if _ffmpeg_major() >= 7 else "-filter_complex_script"
+    out: list[str] = []
+    tmp: list[str] = []
+    i = 0
+    while i < len(cmd):
+        if cmd[i] == "-filter_complex" and i + 1 < len(cmd):
+            f = tempfile.NamedTemporaryFile("w", suffix=".ffgraph", delete=False, encoding="utf-8")
+            f.write(cmd[i + 1])
+            f.close()
+            out += [flag, f.name]
+            tmp.append(f.name)
+            i += 2
+        else:
+            out.append(cmd[i])
+            i += 1
+    n = len(subprocess.list2cmdline(out))
+    print(f"Commande ffmpeg raccourcie : {len(subprocess.list2cmdline(cmd))} -> {n} caracteres")
+    return out, tmp
+
+
 def _run_ffmpeg_with_progress(cmd: list[str], progress_cb, total_seconds: float | None = None,
                               on_start=None) -> tuple[int, str]:
+    cmd, _tmp_files = _fit_command_line(cmd)
+    try:
+        return _run_ffmpeg_with_progress_inner(cmd, progress_cb, total_seconds, on_start)
+    finally:
+        for _f in _tmp_files:
+            try:
+                os.unlink(_f)
+            except OSError:
+                pass
+
+
+def _run_ffmpeg_with_progress_inner(cmd, progress_cb, total_seconds, on_start):
     proc = subprocess.Popen(
         cmd,
         stdout=subprocess.PIPE,
