@@ -1,8 +1,10 @@
 """Lancement de l'application."""
 
 import sys
+from pathlib import Path
 from PySide6.QtWidgets import QApplication
 from PySide6.QtCore import QTimer
+from PySide6.QtGui import QIcon
 
 from pongedit.utils import PROJECT_DIR
 from pongedit.app_state import _cleanup_orphan_exports
@@ -22,6 +24,17 @@ def _deferred_orphan_cleanup():
             print(f"Nettoyage : {n} export(s) orphelin(s) supprimé(s).")
     except Exception as e:
         print(f"Nettoyage orphelins: {e}")
+
+
+def _restart():
+    """Relance l'app (même emplacement de fenêtre) puis ferme celle-ci."""
+    import os
+    import subprocess
+    from pongedit.utils import INSTANCE_SLOT
+    cmd = [sys.executable] if getattr(sys, "frozen", False) else [sys.executable, os.path.abspath(sys.argv[0])]
+    cmd += ["--slot", str(INSTANCE_SLOT)]
+    QApplication.instance().aboutToQuit.connect(lambda: subprocess.Popen(cmd, start_new_session=True))
+    QApplication.quit()
 
 
 def _start_update_check(win):
@@ -46,8 +59,15 @@ def _start_update_check(win):
         if v:
             box = QMessageBox(win)
             box.setWindowTitle("Mise à jour")
-            box.setText(f"La version {v} est prête.\nElle sera utilisée au prochain lancement.")
             box.setIcon(QMessageBox.Information)
+            box.setText(f"La version {v} est prête.")
+            box.setInformativeText("Redémarrer maintenant pour l'utiliser ?\n"
+                                   "(Sinon, elle sera utilisée au prochain lancement.)")
+            box.setStandardButtons(QMessageBox.Yes | QMessageBox.No)
+            box.setDefaultButton(QMessageBox.Yes)
+            box.button(QMessageBox.Yes).setText("Redémarrer")
+            box.button(QMessageBox.No).setText("Plus tard")
+            box.finished.connect(lambda r: _restart() if r == QMessageBox.Yes else None)
             box.open()
 
     timer = QTimer(win)
@@ -58,6 +78,18 @@ def _start_update_check(win):
 def main():
     app = QApplication(sys.argv)
     app.setApplicationName("Ping Pong Edit")
+
+    if sys.platform.startswith("win"):
+        # Sans cet identifiant, la barre des tâches Windows regroupe l'app sous l'icône
+        # de Python/PyInstaller au lieu de la raquette.
+        try:
+            import ctypes
+            ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID("fr.eliotgourdoux.pingpongedit")
+        except Exception:
+            pass
+    _icon = Path(__file__).parent / "assets" / "icon.png"
+    if _icon.exists():
+        app.setWindowIcon(QIcon(str(_icon)))
 
     # Dock icon via PyObjC (only reliable API for macOS dock)
     try:

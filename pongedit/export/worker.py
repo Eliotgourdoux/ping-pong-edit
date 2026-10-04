@@ -6,7 +6,7 @@ from PySide6.QtCore import QThread, Signal
 
 from pongedit.utils import EXPORTS_DIR, _get_fps, _get_video_dimensions, _reserve_output_path
 from pongedit.match.scoring import _compute_stats_from_dicts
-from pongedit.export.encoding import _max_quality_video_args, _run_ffmpeg_with_progress
+from pongedit.export.encoding import _max_quality_video_args, _run_ffmpeg_with_progress, _hwaccel_args
 from pongedit.export.segments import _adjusted_time, _build_kept_segments, _kept_duration
 from pongedit.export.cards import _is_hlg_source, _make_stats_card_png, _scorecard_margin
 from pongedit.export.filters import _build_filter
@@ -263,10 +263,10 @@ class ExportWorker(QThread):
             n_segs = len(kept_segments)   # la carte de stats devient l'input n°n_segs
             seg_inputs: list[str] = []
             if n_segs == 1 and not has_cuts:
-                seg_inputs = ["-hwaccel", "videotoolbox", "-i", self.video_path]
+                seg_inputs = [*_hwaccel_args(), "-i", self.video_path]
             else:
                 for _ss, _se in kept_segments:
-                    seg_inputs += ["-hwaccel", "videotoolbox",
+                    seg_inputs += [*_hwaccel_args(),
                                    "-ss", f"{_ss:.4f}", "-to", f"{_se:.4f}",
                                    "-i", self.video_path]
                 _cat = "".join(

@@ -1,6 +1,6 @@
 """Encodage ffmpeg : VideoToolbox, débit, progression."""
 
-import os, subprocess, threading
+import os, subprocess, sys, threading
 
 from pongedit.utils import _probe_video_props
 
@@ -20,6 +20,48 @@ def _check_videotoolbox() -> bool:
         except Exception:
             _VIDEOTOOLBOX_CACHE = False
     return _VIDEOTOOLBOX_CACHE
+
+
+# ── Choix de l'encodeur matériel (Mac, NVIDIA, Intel, AMD, sinon processeur) ──
+# On ne se fie pas à la liste `ffmpeg -encoders` : un encodeur peut y figurer sans que la
+# carte correspondante existe. On tente donc un VRAI mini-encodage de 0,1 s, dans l'ordre
+# de préférence de chaque système, et on garde le premier qui marche.
+
+_HW_CACHE: dict = {}
+
+
+def _hw_candidates() -> list[str]:
+    if sys.platform == "darwin":
+        return ["hevc_videotoolbox"]
+    return ["hevc_nvenc", "hevc_qsv", "hevc_amf"]
+
+
+def _probe_encoder(name: str, ten_bit: bool) -> bool:
+    pix = "p010le" if ten_bit else "nv12"
+    cmd = ["ffmpeg", "-hide_banner", "-v", "error", "-f", "lavfi",
+           "-i", "color=c=black:s=256x144:r=30:d=0.1", "-vf", f"format={pix}",
+           "-c:v", name, "-f", "null", "-"]
+    try:
+        r = subprocess.run(cmd, capture_output=True, timeout=20,
+                           creationflags=0x08000000 if sys.platform.startswith("win") else 0)
+        return r.returncode == 0
+    except Exception:
+        return False
+
+
+def _hw_encoder(ten_bit: bool) -> str | None:
+    """Nom de l'encodeur matériel HEVC utilisable ici (ou None → logiciel)."""
+    key = bool(ten_bit)
+    if key not in _HW_CACHE:
+        _HW_CACHE[key] = next((n for n in _hw_candidates() if _probe_encoder(n, ten_bit)), None)
+        print(f"Encodeur vidéo ({'10' if ten_bit else '8'} bits) : {_HW_CACHE[key] or 'logiciel (libx265)'}")
+    return _HW_CACHE[key]
+
+
+def _hwaccel_args() -> list[str]:
+    """Décodage matériel de la source : puce Apple sur Mac, sinon le meilleur disponible
+    (D3D11 sur Windows, etc.). `auto` retombe tout seul sur le logiciel si besoin."""
+    return ["-hwaccel", "videotoolbox" if sys.platform == "darwin" else "auto"]
 
 
 def _run_ffmpeg_with_progress(cmd: list[str], progress_cb, total_seconds: float | None = None,
@@ -130,27 +172,47 @@ def _max_quality_video_args(video_path: str | None = None, *,
     if props.get("color_space"):
         color_tags += ["-colorspace", props["color_space"]]
 
-    if _check_videotoolbox():
+    enc = _hw_encoder(ten_bit)
+    maxrate, bufsize = str(int(target * 1.5)), str(int(target * 3))
+    profile = "main10" if ten_bit else "main"
+    pixfmt = "yuv420p10le" if ten_bit else "yuv420p"
+    common_tail = ["-tag:v", "hvc1", "-movflags", "+faststart"]   # hvc1 : QuickTime/Finder/Windows lisent
+
+    if enc == "hevc_videotoolbox":
         return [
-            "-c:v", "hevc_videotoolbox",
-            *color_tags,
+            "-c:v", enc, *color_tags,
             # Mesuré sur 4K60 10 bits : encodeur ~30 % plus rapide pour un SSIM
             # identique (0.99123 vs 0.99126) — le débit fixe la qualité, pas ce flag.
             "-prio_speed", "1",
-            "-b:v", str(target),
-            "-maxrate", str(int(target * 1.5)),
-            "-bufsize", str(int(target * 3)),
-            "-profile:v", "main10" if ten_bit else "main",
-            "-pix_fmt", "yuv420p10le" if ten_bit else "yuv420p",
-            "-tag:v", "hvc1",        # sans ça QuickTime/Finder refusent de lire le fichier
-            "-movflags", "+faststart",
+            "-b:v", str(target), "-maxrate", maxrate, "-bufsize", bufsize,
+            "-profile:v", profile, "-pix_fmt", pixfmt, *common_tail,
         ]
+    if enc == "hevc_nvenc":      # cartes NVIDIA
+        return [
+            "-c:v", enc, *color_tags,
+            "-preset", "p5", "-tune", "hq", "-rc", "vbr",
+            "-b:v", str(target), "-maxrate", maxrate, "-bufsize", bufsize,
+            "-profile:v", profile, "-pix_fmt", "p010le" if ten_bit else "yuv420p", *common_tail,
+        ]
+    if enc == "hevc_qsv":        # Intel (Quick Sync)
+        return [
+            "-c:v", enc, *color_tags,
+            "-preset", "medium",
+            "-b:v", str(target), "-maxrate", maxrate, "-bufsize", bufsize,
+            "-profile:v", profile, "-pix_fmt", "p010le" if ten_bit else "nv12", *common_tail,
+        ]
+    if enc == "hevc_amf":        # cartes AMD
+        return [
+            "-c:v", enc, *color_tags,
+            "-quality", "balanced", "-rc", "vbr_peak",
+            "-b:v", str(target), "-maxrate", maxrate, "-bufsize", bufsize,
+            "-profile:v", profile, "-pix_fmt", "p010le" if ten_bit else "nv12", *common_tail,
+        ]
+    # Aucun encodeur matériel : processeur seul. `veryfast` + débit imposé reste
+    # nettement plus rapide que l'ancien `medium` crf 18, pour une qualité très proche.
     return [
-        "-c:v", "libx265",
-        *color_tags,
-        "-preset", "medium",
-        "-crf", "18",
-        "-pix_fmt", "yuv420p10le" if ten_bit else "yuv420p",
-        "-tag:v", "hvc1",
-        "-movflags", "+faststart",
+        "-c:v", "libx265", *color_tags,
+        "-preset", "veryfast", "-crf", "20",
+        "-x265-params", "log-level=error",
+        "-pix_fmt", pixfmt, *common_tail,
     ]

@@ -16,6 +16,8 @@ OutputBaseFilename=PingPongEdit-Setup-{#AppVersion}
 Compression=lzma2
 SolidCompression=yes
 WizardStyle=modern
+SetupIconFile=..\assets\icon.ico
+UninstallDisplayIcon={app}\PingPongEdit.exe
 DisableProgramGroupPage=yes
 UninstallDisplayName=Ping Pong Edit
 ArchitecturesInstallIn64BitMode=x64compatible
@@ -35,3 +37,30 @@ Name: "{autodesktop}\Ping Pong Edit"; Filename: "{app}\PingPongEdit.exe"; Tasks:
 
 [Run]
 Filename: "{app}\PingPongEdit.exe"; Description: "Lancer Ping Pong Edit"; Flags: nowait postinstall skipifsilent
+
+[Code]
+var
+  InstallDone: Boolean;
+
+procedure CurStepChanged(CurStep: TSetupStep);
+begin
+  if CurStep = ssDone then
+    InstallDone := True;
+end;
+
+{ À la fermeture de l'assistant : propose de supprimer le fichier d'installation, devenu
+  inutile. Il ne peut pas s'effacer lui-même pendant qu'il tourne : on lance une
+  commande qui attend quelques secondes puis le supprime. }
+procedure DeinitializeSetup();
+var
+  Code: Integer;
+begin
+  if InstallDone and (not WizardSilent) then
+    if MsgBox('Ping Pong Edit est installé.' + #13#10 + #13#10 +
+              'Supprimer le fichier d''installation maintenant ?' + #13#10 +
+              '(Vous n''en avez plus besoin.)',
+              mbConfirmation, MB_YESNO) = IDYES then
+      Exec(ExpandConstant('{cmd}'),
+           '/C ping 127.0.0.1 -n 4 > nul & del /F /Q "' + ExpandConstant('{srcexe}') + '"',
+           '', SW_HIDE, ewNoWait, Code);
+end;

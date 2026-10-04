@@ -38,7 +38,9 @@ a = Analysis(["launcher.py"], pathex=[str(ROOT)], datas=datas,
              hiddenimports=sorted(hidden), excludes=["tkinter", "pytest"])
 pyz = PYZ(a.pure)
 exe = EXE(pyz, a.scripts, [], exclude_binaries=True, name="PingPongEdit",
-          console=False, icon=None)
+          console=False,
+          icon=str(ROOT / "assets" / ("icon.ico" if sys.platform.startswith("win") else "icon.icns")))
 coll = COLLECT(exe, a.binaries, a.datas, name="PingPongEdit")
 if sys.platform == "darwin":
-    app = BUNDLE(coll, name="Ping Pong Edit.app", bundle_identifier="fr.eliotgourdoux.pingpongedit")
+    app = BUNDLE(coll, name="Ping Pong Edit.app", icon=str(ROOT / "assets" / "icon.icns"),
+                 bundle_identifier="fr.eliotgourdoux.pingpongedit")
