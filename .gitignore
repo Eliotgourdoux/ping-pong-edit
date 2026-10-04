@@ -1,0 +1,31 @@
+# Données personnelles / locales
+sessions/
+snapshots/
+testing_vid/
+vm_test/
+.claude/
+.DS_Store
+__pycache__/
+*.pyc
+
+# Sauvegardes et anciennes versions
+*.bak*
+pongedit.bak-*/
+pong_edit_backup*.py
+pong_edit_with_stats.py
+Pong-Video-Cut_avant-decoupage*/
+
+# Lanceurs générés sur chaque machine (contiennent le chemin Python local)
+Ping Pong Edit.app/
+Ping Pong Edit.bat
+Ping Pong Edit.desktop
+ping-pong-edit.sh
+ping-pong-edit-2.command
+
+# Fichiers de build de release
+dist/
+build/
+
+# Ancien prototype web, hors périmètre
+backend/
+frontend/
