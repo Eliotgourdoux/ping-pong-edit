@@ -1,0 +1,65 @@
+name: Build installeur Windows
+
+# Se déclenche à chaque tag vX.Y.Z (poussé par release.py) ou à la main.
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Version
+        id: ver
+        shell: bash
+        run: |
+          V=$(python -c "import re;print(re.search(r'VERSION = \"([^\"]+)\"', open('pongedit/version.py').read()).group(1))")
+          echo "version=$V" >> "$GITHUB_OUTPUT"
+
+      - name: Dépendances
+        run: pip install pyinstaller PySide6 Pillow numpy
+
+      - name: Empaqueter l'application
+        run: pyinstaller pongedit.spec --noconfirm
+
+      - name: Ajouter ffmpeg et ffprobe
+        shell: pwsh
+        run: |
+          Invoke-WebRequest "https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-master-latest-win64-gpl.zip" -OutFile ffmpeg.zip
+          Expand-Archive ffmpeg.zip -DestinationPath ffmpeg_tmp
+          New-Item -ItemType Directory -Force dist/PingPongEdit/bin | Out-Null
+          Copy-Item ffmpeg_tmp/*/bin/ffmpeg.exe, ffmpeg_tmp/*/bin/ffprobe.exe dist/PingPongEdit/bin/
+
+      - name: Test de démarrage (l'app doit s'ouvrir sans planter)
+        shell: pwsh
+        run: |
+          $p = Start-Process dist/PingPongEdit/PingPongEdit.exe -PassThru
+          Start-Sleep 15
+          if ($p.HasExited) {
+            Write-Host "L'application s'est fermée (code $($p.ExitCode))"
+            Get-Content "$env:APPDATA/PingPongEdit/log.txt" -ErrorAction SilentlyContinue
+            exit 1
+          }
+          Stop-Process $p -Force
+          & dist/PingPongEdit/bin/ffmpeg.exe -version | Select-Object -First 1
+
+      - name: Construire l'installeur
+        shell: pwsh
+        run: |
+          choco install innosetup -y --no-progress
+          & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" "/DAppVersion=${{ steps.ver.outputs.version }}" installer\pongedit.iss
+
+      - name: Publier dans la release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/PingPongEdit-Setup-${{ steps.ver.outputs.version }}.exe

@@ -41,8 +41,16 @@ def main():
         subprocess.run(["git", "commit", "-m", f"Version {version}"], cwd=ROOT, check=True)
     subprocess.run(["git", "tag", f"v{version}"], cwd=ROOT, check=True)
     subprocess.run(["git", "push", "origin", "HEAD", "--tags"], cwd=ROOT, check=True)
-    subprocess.run(["gh", "release", "create", f"v{version}", str(zpath), str(sha),
-                    "--repo", REPO, "--title", f"v{version}", "--notes", notes], check=True)
+    # Le workflow GitHub (installeur .exe) démarre dès que le tag est poussé : il peut avoir
+    # déjà créé la release. On crée si absente, sinon on y ajoute le zip.
+    exists = subprocess.run(["gh", "release", "view", f"v{version}", "--repo", REPO],
+                            capture_output=True).returncode == 0
+    if exists:
+        subprocess.run(["gh", "release", "upload", f"v{version}", str(zpath), str(sha),
+                        "--repo", REPO, "--clobber"], check=True)
+    else:
+        subprocess.run(["gh", "release", "create", f"v{version}", str(zpath), str(sha),
+                        "--repo", REPO, "--title", f"v{version}", "--notes", notes], check=True)
     print(f"Release v{version} publiée.")
 
 

@@ -172,10 +172,12 @@ def _spawn_new_window() -> None:
         )
     else:
         env = dict(os.environ, PONG_SLOT=slot)
-        subprocess.Popen(
-            [sys.executable, os.path.abspath(ENTRY_SCRIPT), "--slot", slot],
-            env=env, start_new_session=True,
-        )
+        if getattr(sys, "frozen", False):
+            # Version installée (.exe / .app empaqueté) : l'exécutable EST le programme.
+            cmd = [sys.executable, "--slot", slot]
+        else:
+            cmd = [sys.executable, os.path.abspath(ENTRY_SCRIPT), "--slot", slot]
+        subprocess.Popen(cmd, env=env, start_new_session=True)
 
 
 # ── Carte d'intro : dernières valeurs saisies ─────────────────────────────────
