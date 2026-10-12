@@ -2,7 +2,7 @@
 
 from PySide6.QtWidgets import QWidget
 from PySide6.QtCore import Qt, Signal, QRectF
-from PySide6.QtGui import QColor, QPainter, QPen, QBrush, QFont, QPixmap
+from PySide6.QtGui import QColor, QPainter, QPen, QBrush, QFont, QPixmap, QPainterPath, QRegion
 
 from pongedit.utils import fmt_time
 from pongedit.match.actions import Action, CutAction, PointAction, RotateAction, ServeSwapAction
@@ -17,7 +17,7 @@ class TimelineWidget(QWidget):
     def __init__(self):
         super().__init__()
         self.setFixedHeight(64)
-        themed(self, lambda: f"background: {UI['surface']};")
+        themed(self, lambda: f"background: {UI['tl_bg']};")
         self.setCursor(Qt.PointingHandCursor)
         self.setToolTip("Timeline — cliquer ou glisser pour se déplacer  ·  pastilles = points  ·  "
                         "zones rouges = coupes  ·  barre verte = highlight gardé  ·  hachuré = rejeté")
@@ -83,6 +83,8 @@ class TimelineWidget(QWidget):
     def resizeEvent(self, e):
         self._bg_cache = None   # la géométrie change => fond à redessiner
         super().resizeEvent(e)
+        path = QPainterPath(); path.addRoundedRect(QRectF(self.rect()), 14, 14)   # coins arrondis (masque statique)
+        self.setMask(QRegion(path.toFillPolygon().toPolygon()))
 
     def _build_bg(self) -> QPixmap:
         """Dessine la partie STATIQUE (fond + coupes + points) dans un pixmap réutilisé.
@@ -94,7 +96,7 @@ class TimelineWidget(QWidget):
         dpr = self.devicePixelRatioF()
         pm = QPixmap(max(1, int(w * dpr)), max(1, int(h * dpr)))
         pm.setDevicePixelRatio(dpr)
-        pm.fill(QColor(UI["surface"]))
+        pm.fill(QColor(UI["tl_bg"]))
         p = QPainter(pm)
         p.setRenderHint(QPainter.Antialiasing)
         # Ligne médiane discrète : donne un repère même sur une vidéo sans action.

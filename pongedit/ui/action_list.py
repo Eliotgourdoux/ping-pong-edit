@@ -35,7 +35,7 @@ class ActionDelegate(QStyledItemDelegate):
             p.setPen(Qt.NoPen); p.setBrush(QColor(UI["selected"])); p.drawRoundedRect(r, 8, 8)
             p.setPen(QPen(col, 1)); p.setBrush(Qt.NoBrush); p.drawRoundedRect(r.adjusted(.5, .5, -.5, -.5), 8, 8)
         elif option.state & QStyle.State_MouseOver:
-            p.setPen(Qt.NoPen); p.setBrush(QColor(UI["surface"])); p.drawRoundedRect(r, 8, 8)
+            p.setPen(Qt.NoPen); p.setBrush(QColor(UI["raised"])); p.drawRoundedRect(r, 8, 8)
 
         # Pastille : disque plein pour un point, glyphe pour les autres actions
         cx, cy = r.left() + 20, r.center().y()
@@ -47,7 +47,7 @@ class ActionDelegate(QStyledItemDelegate):
             p.setPen(Qt.NoPen); p.setBrush(col); p.drawEllipse(QRectF(cx - 5, cy - 5, 10, 10))
 
         # Temps à droite (mono)
-        tfont = QFont(); tfont.setFamilies(["Menlo", "Consolas", "Courier New"]); tfont.setPixelSize(11); tfont.setStyleHint(QFont.Monospace)
+        tfont = QFont(option.font); tfont.setPixelSize(11); tfont.setWeight(QFont.Medium)
         p.setFont(tfont); p.setPen(QColor(UI["muted"]))
         tr = QRectF(r.left() + 36, r.top(), r.width() - 48, r.height())
         p.drawText(tr, Qt.AlignRight | Qt.AlignVCenter, index.data(ROLE_TIME) or "")

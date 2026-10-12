@@ -53,7 +53,7 @@ class ScoreboardWidget(QWidget):
             name_inp.setToolTip("Nom du joueur (repris dans l'incrustation et l'export)")
             themed(name_inp, lambda pk=pk: (
                 "QLineEdit{"
-                f"color:{UI[pk]}; font-weight:700; font-size:15px;"
+                f"color:{UI[pk + '_text']}; font-weight:700; font-size:15px;"
                 "border:none; border-radius:4px; background:transparent; padding:0 4px;"
                 "}"
                 f"QLineEdit:hover{{ background:{UI['raised']}; }}"
@@ -103,14 +103,14 @@ class ScoreboardWidget(QWidget):
                     pk = "p1" if p == 1 else "p2"
                     themed(lbl, lambda pk=pk: (
                         f"background:{UI[pk]}; color:{UI['on_player']}; font-size:20px; font-weight:800;"
-                        "min-width:40px; min-height:28px; border-radius:6px;"
+                        "min-width:40px; min-height:28px; border-radius:10px;"
                     ))
                 else:
                     won = mine > other
                     themed(lbl, lambda won=won: (
                         f"background:{UI['raised']}; color:{UI['text'] if won else UI['faint']};"
                         f"font-size:13px; font-weight:{'700' if won else '500'};"
-                        "min-width:26px; min-height:22px; border-radius:5px;"
+                        "min-width:26px; min-height:22px; border-radius:8px;"
                     ))
             self._grid.addWidget(l1, 0, col_i + 3)
             self._grid.addWidget(l2, 1, col_i + 3)

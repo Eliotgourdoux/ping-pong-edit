@@ -16,109 +16,79 @@ from PySide6.QtWidgets import QVBoxLayout, QLabel, QFrame
 # timeline (QColor, format #AARRGGBB).
 
 UI_DARK = {
-    "bg":      "#0B0E14",
-    "surface": "#141821",
-    "raised":  "#1A1F2B",
-    "border":  "#232936",
-    "text":    "#FFFFFF",   # blanc franc : l'ancien #E6E9EF paraissait gris
-    "muted":   "#8B93A5",
-    "dim":     "#6B7387",
-    "faint":   "#4B5366",
-    "accent":  "#4F8DFF",
-    "p1":      "#386CD4",   # = OV_P1 du rendu final (export/cards.py)
-    "p2":      "#DE6842",   # = OV_P2
-    "danger":  "#F0525A",
-    "success": "#3DDC97",
-    "gold":    "#F5C542",
-    "warn":    "#F5C542",
+    # Verre liquide « Cockpit » : les fonds sont des voiles translucides (#AARRGGBB, valables
+    # en QSS comme pour QColor) posés sur le voile de la fenêtre ; le texte est toujours blanc
+    # sur vitre sombre. Les teintes de texte restent opaques (le mélange QColor ignore l'alpha).
+    "bg":      "#00000000",   # transparent : c'est le voile de la fenêtre qui fait le fond
+    "surface": "#4D060910",   # vitre : nuit désaturée 0.30
+    "raised":  "#12FFFFFF",   # bouton / champ sur vitre : blanc 0.07
+    "border":  "#22FFFFFF",
+    "text":    "#FFFFFF",
+    "muted":   "#C6CAD2",     # ~0.78
+    "dim":     "#A2A7B2",
+    "faint":   "#8B909C",     # ~0.58, reste lisible sur la vitre
+    "accent":  "#5CC8FF",     # cyan-bleu : seule couleur d'accent
+    "p1":      "#386CD4",     # = OV_P1 du rendu final (export/cards.py)
+    "p2":      "#DE6842",     # = OV_P2
+    "p1_text": "#7FA8FF",     # versions claires pour du TEXTE sur vitre sombre
+    "p2_text": "#FF9A78",
+    "danger":  "#FF5A6A",
+    "success": "#4BF0A0",
+    "gold":    "#FFB648",
+    "warn":    "#FFB648",
     # Survol / états
-    "hover":          "#222838",
-    "border_hover":   "#2E3648",
-    "selected":       "#182642",
-    "on_accent":      "#0B0E14",
+    "hover":          "#2BFFFFFF",
+    "border_hover":   "#59FFFFFF",
+    "selected":       "#2E5CC8FF",
+    "on_accent":      "#FFFFFF",
     "on_player":      "#0B0E14",
-    "accent_hover":   "#6AA0FF",
-    "accent_pressed": "#3B74E0",
-    "accent_dis_bg":  "#2A3A5C",
-    "accent_dis_fg":  "#7C8CAB",
-    "danger_bg":      "#3A1518",
-    "danger_edge":    "#4A1B1F",
-    "danger_pressed": "#2A0E10",
-    "danger_text":    "#F58A90",
-    "danger_soft":    "#FBB4B8",
-    "success_bg":     "#0F3B2C",
-    "success_edge":   "#1B5A43",
-    # Rotation (violet)
-    "rot":            "#B08CFF",
-    "rot_bg":         "#2A1F4D",
-    "rot_fg":         "#C9B8FF",
-    "rot_edge":       "#372A63",
-    "rot_fg_hover":   "#EDE8FF",
-    "rot_on":         "#7A5BE0",
-    "rot_on_hover":   "#8B6CF6",
+    "accent_hover":   "#8DD9FF",
+    "accent_pressed": "#3FA6DE",
+    "accent_dis_bg":  "#14FFFFFF",
+    "accent_dis_fg":  "#6F7385",
+    "danger_bg":      "#33FF5A6A",
+    "danger_edge":    "#8CFF5A6A",
+    "danger_pressed": "#1FFF5A6A",
+    "danger_text":    "#FF9AA4",
+    "danger_soft":    "#FFC2C8",
+    "success_bg":     "#294BF0A0",
+    "success_edge":   "#8C4BF0A0",
+    # Rotation (violet néon)
+    "rot":            "#8FA6C8",
+    "rot_bg":         "#268FA6C8",
+    "rot_fg":         "#D6E2F5",
+    "rot_edge":       "#668FA6C8",
+    "rot_fg_hover":   "#FFFFFF",
+    "rot_on":         "#8C8FA6C8",
+    "rot_on_hover":   "#A68FA6C8",
     "rot_on_fg":      "white",
+    # Néon / verre
+    "violet":      "#7F93B5",   # neutralisé (bleu-gris) : plus de violet
+    "pink":        "#5CC8FF",   # neutralisé : plus de rose
+    "field":       "#4D04060C",   # fond des champs de saisie
+    "glass_top":   "#12FFFFFF",   # dégradé du haut des cartes
+    "glass_bot":   "#40000000",
+    "spec":        "#66FFFFFF",   # reflet spéculaire (bord haut)
+    "accent_bg":   "#2E5CC8FF",
+    "accent_edge": "#8C5CC8FF",
+    "popup":       "#1A1E27",     # menus déroulants : opaques, jamais translucides
+    "veil":        "#12151C",     # fond opaque des boîtes de dialogue système
     # Timeline (dessin)
-    "tl_mid":       "#0EFFFFFF",
-    "tl_cut":       "#66F0525A",
-    "tl_live_cut":  "#A0F0525A",
+    "tl_bg":        "#9908090E",
+    "tl_mid":       "#14FFFFFF",
+    "tl_cut":       "#66FF5A6A",
+    "tl_live_cut":  "#A0FF5A6A",
     "tl_reject":    "#78000000",
     "tl_hatch":     "#1CFFFFFF",
-    "tl_played":    "#164F8DFF",
+    "tl_played":    "#205CC8FF",
     "tl_hover":     "#46FFFFFF",
-    "tl_tc_bg":     "#BE0B1120",
-    "tl_tc_fg":     "#8B93A5",
+    "tl_tc_bg":     "#BE0A0D14",
+    "tl_tc_fg":     "#C6CAD2",
 }
 
-UI_LIGHT = {
-    "bg":      "#EEF1F6",
-    "surface": "#F8F9FC",
-    "raised":  "#FFFFFF",
-    "border":  "#D6DBE4",
-    "text":    "#1A1F2B",
-    "muted":   "#5B6475",
-    "dim":     "#646C7E",
-    "faint":   "#8A92A3",
-    "accent":  "#2563D9",
-    "p1":      "#2F5FC4",
-    "p2":      "#C4532F",
-    "danger":  "#C2303A",
-    "success": "#0B7A50",
-    "gold":    "#D99A00",
-    "warn":    "#8A5D00",
-    "hover":          "#F0F3F8",
-    "border_hover":   "#BEC5D2",
-    "selected":       "#DCE7FB",
-    "on_accent":      "#FFFFFF",
-    "on_player":      "#FFFFFF",
-    "accent_hover":   "#3A74E6",
-    "accent_pressed": "#1D52BA",
-    "accent_dis_bg":  "#C9D6EE",
-    "accent_dis_fg":  "#6F7F9C",
-    "danger_bg":      "#FBE4E6",
-    "danger_edge":    "#F0C3C7",
-    "danger_pressed": "#F6CFD3",
-    "danger_text":    "#B42630",
-    "danger_soft":    "#9E1F29",
-    "success_bg":     "#DDF4EA",
-    "success_edge":   "#A6DCC4",
-    "rot":            "#7447D6",
-    "rot_bg":         "#EEE8FD",
-    "rot_fg":         "#5B34B8",
-    "rot_edge":       "#D8CCF7",
-    "rot_fg_hover":   "#46238F",
-    "rot_on":         "#7A5BE0",
-    "rot_on_hover":   "#6A4AD4",
-    "rot_on_fg":      "white",
-    "tl_mid":       "#14000000",
-    "tl_cut":       "#4AE5484F",
-    "tl_live_cut":  "#99E5484F",
-    "tl_reject":    "#2E1A1F2B",
-    "tl_hatch":     "#38000000",
-    "tl_played":    "#1A2563D9",
-    "tl_hover":     "#591A1F2B",
-    "tl_tc_bg":     "#E6FFFFFF",
-    "tl_tc_fg":     "#5B6475",
-}
+# Le verre néon est sombre par nature (texte blanc sur vitre sombre) : le thème « clair »
+# reprend la même palette. Le sélecteur de thème de la barre d'outils est masqué.
+UI_LIGHT = dict(UI_DARK)
 
 assert UI_DARK.keys() == UI_LIGHT.keys()
 
@@ -164,6 +134,7 @@ def save_theme_choice(dark: bool):
 
 def apply_palette(dark: bool) -> bool:
     """Met `UI` à jour EN PLACE. Renvoie True si le thème a changé."""
+    dark = True   # verre néon : un seul thème, sombre
     changed = dark != _current["dark"]
     _current["dark"] = dark
     UI.clear()
@@ -205,7 +176,7 @@ def _sep():
     themed(f, lambda: f"background:{UI['border']};border:none;"); return f
 
 def _section(text):
-    lbl = QLabel(text.upper())
+    lbl = QLabel(text)
     lbl.setObjectName("sectionTitle")
     return lbl
 
@@ -218,10 +189,11 @@ def _field_label(text, min_w=0):
 
 def _card(title: str | None = None, spacing: int = 8) -> tuple[QFrame, QVBoxLayout]:
     """Carte de section du panneau latéral : surface arrondie + titre discret."""
-    f = QFrame()
+    from pongedit.ui.glass import GlassCard
+    f = GlassCard()
     f.setObjectName("card")
     v = QVBoxLayout(f)
-    v.setContentsMargins(12, 10, 12, 12)
+    v.setContentsMargins(16, 14, 16, 16)
     v.setSpacing(spacing)
     if title:
         v.addWidget(_section(title))

@@ -15,6 +15,7 @@ from pongedit.export.merge import (
     CANVAS_CHOICES, FIT_CHOICES, MergeWorker, _merge_canvas, _probe_clip_info,
     _segment_display_size,
 )
+from pongedit.ui.glass import glass_dialog
 from pongedit.ui.style import UI, UI_DARK, _field_label, _section, _sep, is_dark, themed
 
 
@@ -36,6 +37,7 @@ class MergeDialog(QDialog):
         # Styles via themed() : ré-appliqués à chaud au changement de thème
         # (MainWindow.apply_theme → restyle_registered).
         themed(self, lambda: f"QDialog{{background:{UI['bg']}; color:{UI['text']};}}")
+        glass_dialog(self)
 
         self.segments: list[dict] = []
         self.result_path: str | None = None
@@ -83,9 +85,7 @@ class MergeDialog(QDialog):
         root.addWidget(_section("Segments"))
         self.seg_list = QListWidget()
         self.seg_list.setToolTip("Les segments sont collés dans cet ordre")
-        self.seg_list.setStyleSheet(
-            'QListWidget{font-family:"Menlo","SF Mono",monospace; font-size:11px;}'
-        )
+        self.seg_list.setStyleSheet("QListWidget{font-size:12px;}")
         self.seg_list.currentRowChanged.connect(lambda _: self._sync_editor())
         root.addWidget(self.seg_list, 1)
 
@@ -117,7 +117,7 @@ class MergeDialog(QDialog):
         self.seg_title = QLabel("—")
         # Sombre : gris clair d'origine (hors palette), conservé à l'identique.
         themed(self.seg_title, lambda: (
-            f"color:{'#C3C9D6' if is_dark() else UI['text']};font-size:12px;"))
+            f"color:{UI['muted']};font-size:12px;"))
         root.addWidget(self.seg_title)
 
         row = QHBoxLayout(); row.setSpacing(8)
@@ -366,7 +366,7 @@ class MergeDialog(QDialog):
         if self._status_error:
             return f"font-size:11px;color:{UI['danger_text']};"
         # Sombre : vert clair d'origine (hors palette), conservé à l'identique.
-        return f"font-size:11px;color:{'#7FE9BE' if is_dark() else UI['success']};"
+        return f"font-size:11px;color:{UI['success']};"
 
     def _say(self, text: str, error: bool = False):
         self.status.setText(text)
@@ -460,6 +460,7 @@ class IntroCardDialog(QDialog):
         self.setWindowTitle("Carte d'intro")
         self.setMinimumWidth(660)
         themed(self, lambda: f"QDialog{{background:{UI['bg']}; color:{UI['text']};}}")
+        glass_dialog(self)
 
         v = QVBoxLayout(self)
         v.setContentsMargins(18, 16, 18, 16)
@@ -487,9 +488,8 @@ class IntroCardDialog(QDialog):
         grid.setVerticalSpacing(6)
         clubs = [c for c in memory.get("recent_clubs", []) if isinstance(c, str)]
         for col, (k, title, tok) in enumerate((("p1", "Joueur 1", "p1"), ("p2", "Joueur 2", "p2"))):
-            head = QLabel(title.upper())
-            themed(head, lambda tok=tok: f"color:{UI[tok]};font-size:10px;font-weight:700;"
-                                         f"letter-spacing:2px;")
+            head = QLabel(title)
+            themed(head, lambda tok=tok: f"color:{UI[tok + '_text']};font-size:15px;font-weight:600;")
             grid.addWidget(head, 0, col * 2, 1, 2)
             for row, (f, lbl, ph) in enumerate((("first", "Prénom", "Prénom"),
                                                  ("last", "Nom", "Nom de famille"),
@@ -507,8 +507,8 @@ class IntroCardDialog(QDialog):
         v.addLayout(grid)
 
         v.addWidget(_sep())
-        ev = QLabel("ÉVÉNEMENT")
-        themed(ev, lambda: f"color:{UI['muted']};font-size:10px;font-weight:700;letter-spacing:2px;")
+        ev = QLabel("Événement")
+        themed(ev, lambda: f"color:{UI['text']};font-size:15px;font-weight:600;")
         v.addWidget(ev)
         erow = QGridLayout()
         erow.setHorizontalSpacing(10)

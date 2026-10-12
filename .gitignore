@@ -29,3 +29,7 @@ build/
 # Ancien prototype web, hors périmètre
 backend/
 frontend/
+
+# Notes et captures du travail de design (locales)
+CRITIQUE.md
+captures-neon/

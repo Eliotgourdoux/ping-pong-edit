@@ -150,7 +150,9 @@ class VideoContainer(QWidget):
 
     def resizeEvent(self, event):
         r = self.rect()
-        self.video_view.setGeometry(r)
+        # fitInView garde 2 px de marge : la vue déborde de 3 px (le conteneur rogne) pour que
+        # l'image touche exactement le bord arrondi du cadre.
+        self.video_view.setGeometry(r.adjusted(-3, -3, 3, 3))
         self._layout_video()
         self.flash.setGeometry(r)
         self.cut_lbl.setGeometry(r)

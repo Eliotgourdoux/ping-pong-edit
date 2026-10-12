@@ -3,7 +3,7 @@
 import math, os, sys, tempfile, shutil, re, json, time
 from pathlib import Path
 from PySide6.QtWidgets import (
-    QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QPushButton,
+    QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
     QLabel, QFileDialog, QListWidget, QListWidgetItem, QDoubleSpinBox,
     QLineEdit, QProgressBar, QComboBox, QSizePolicy, QFrame, QDialog,
     QScrollArea, QCheckBox, QSplitter, QStackedWidget, QAbstractSpinBox, QTextEdit,
@@ -42,6 +42,8 @@ from pongedit.export.segments import (
 from pongedit.export.worker import ExportWorker
 from pongedit.export import intro as _intro
 from pongedit.ball.trail import TRAIL_LABELS, TrailWorker
+from pongedit.ui.glass import glass_window, glass_dialog, add_glow, GlassPanel, VideoStage
+from pongedit.ui.polish import FadeButton as QPushButton, play_entrance, ElidedCombo
 from pongedit.ui.style import UI, _card, _field_label, _sep, themed, restyle_registered, is_dark, apply_palette, save_theme_choice
 from pongedit.ui.action_list import ActionDelegate, ROLE_KIND, ROLE_TITLE, ROLE_SUB, ROLE_TIME
 from pongedit.ui.timeline import TimelineWidget
@@ -143,7 +145,8 @@ class ToggleRow(QCheckBox):
         """a → b, k ∈ [0, 1]."""
         return QColor(round(a.red()   + (b.red()   - a.red())   * k),
                       round(a.green() + (b.green() - a.green()) * k),
-                      round(a.blue()  + (b.blue()  - a.blue())  * k))
+                      round(a.blue()  + (b.blue()  - a.blue())  * k),
+                      round(a.alpha() + (b.alpha() - a.alpha()) * k))
 
     # ── Glyphes des pastilles ─────────────────────────────────────────────────
     # Même langage partout : encre neutre (faint) à OFF qui glisse vers
@@ -392,6 +395,7 @@ class MainWindow(QMainWindow):
         self._setup_player()
         self._apply_mute_state()
         self._apply_styles()
+        glass_window(self)   # voile translucide + flou natif (cf. ui/glass.py)
         QApplication.instance().installEventFilter(self)
 
         # Restore last opened video (propre à la fenêtre) + historique partagé,
@@ -418,15 +422,19 @@ class MainWindow(QMainWindow):
         # ── Left ──
         left = QWidget()
         lv = QVBoxLayout(left)
-        lv.setContentsMargins(0, 0, 0, 0)
+        lv.setContentsMargins(0, 10, 0, 12)
         lv.setSpacing(0)
 
-        tb = QWidget(); tb.setFixedHeight(50); tb.setObjectName("toolbar")
-        themed(tb, lambda: f"QWidget#toolbar{{background:{UI['surface']};border-bottom:1px solid {UI['border']};}}")
-        tbl = QHBoxLayout(tb); tbl.setContentsMargins(10, 0, 10, 0); tbl.setSpacing(4)
-        brand = QLabel("PONG EDIT")
+        def _side(w):   # vitres alignées sur la vitre vidéo (qui garde 8 px de halo de chaque côté)
+            box = QWidget(); hb = QHBoxLayout(box); hb.setContentsMargins(8, 0, 8, 0); hb.setSpacing(0)
+            hb.addWidget(w); return box
+
+        tb = GlassPanel(radius=24, glow=0.6); tb.setFixedHeight(48); tb.setObjectName("toolbar")
+        self._tb_wrap = tb
+        tbl = QHBoxLayout(tb); tbl.setContentsMargins(10, 0, 8, 0); tbl.setSpacing(6)
+        brand = QLabel("Ping Pong Edit")
         themed(brand, lambda: (
-            f"color:{UI['text']}; font-size:12px; font-weight:800; letter-spacing:2px;"
+            f"color:{UI['text']}; font-size:15px; font-weight:700;"
             "background:transparent; padding-right:6px;"
         ))
         self.brand_lbl = brand
@@ -438,7 +446,7 @@ class MainWindow(QMainWindow):
         btn.setCursor(Qt.PointingHandCursor)
         btn.clicked.connect(self._open_file)
         tbl.addWidget(btn)
-        self.history_combo = QComboBox()
+        self.history_combo = ElidedCombo()   # texte trop long : « … » au lieu d'une coupe nette
         # Souple : c'est elle qui absorbe en premier la largeur perdue.
         self.history_combo.setMinimumWidth(140)
         self.history_combo.setMaximumWidth(320)
@@ -470,7 +478,7 @@ class MainWindow(QMainWindow):
         self.hl_btn.setCheckable(True)
         self.hl_btn.setToolTip(
             "Trier les séquences conservées : chaque séquence est lue puis mise en pause.\n"
-            f"{KL('I')} garder  ·  {KL('N')} jeter  ·  ⇧← ⇧→ séquence préc./suiv.  ·  Espace revoir  ·  Échap quitter\n"
+            f"{KL('I')} garder  ·  {KL('N')} jeter  ·  ← → séquence préc./suiv.  ·  ⇧← → ±5 s  ·  Espace revoir  ·  Échap quitter\n"
             "Rouvrable après le tri pour corriger une décision."
         )
         self.hl_btn.setCursor(Qt.PointingHandCursor)
@@ -490,6 +498,7 @@ class MainWindow(QMainWindow):
         self.theme_btn.clicked.connect(self._toggle_theme)
         self._update_theme_btn()
         tbl.addWidget(self.theme_btn)
+        self.theme_btn.hide()   # verre néon : un seul thème (sombre), le sélecteur n'a plus d'effet
         self.mute_btn = QPushButton("Son")
         self.mute_btn.setProperty("variant", "toolbar")
         self.mute_btn.setCheckable(True)
@@ -509,13 +518,25 @@ class MainWindow(QMainWindow):
                    self.hl_btn, self.version_btn, self.theme_btn, self.mute_btn, self.speed_lbl):
             w_.setFixedHeight(34)
         tbl.setAlignment(Qt.AlignVCenter)
-        lv.addWidget(tb)
+        lv.addWidget(_side(tb))
+        lv.addSpacing(10)   # + 6 px de marge du cadre vidéo = 16
 
         self.video_container = VideoContainer()
-        lv.addWidget(self.video_container, 1)
+        self.video_stage = VideoStage(self.video_container)
+        self.video_container.video_item.nativeSizeChanged.connect(
+            lambda *_: self.video_stage.set_native_size(
+                self.video_container.video_item.nativeSize().width(),
+                self.video_container.video_item.nativeSize().height()))
+        self.video_stage.attach(self.video_container.video_item)
+        lv.addWidget(self.video_stage, 1)
+        lv.addSpacing(10)
 
         self.timeline = TimelineWidget()
-        lv.addWidget(self.timeline)
+        _tlw = GlassPanel(radius=22, glow=0.5)
+        _tl = QVBoxLayout(_tlw); _tl.setContentsMargins(6, 6, 6, 6); _tl.setSpacing(0)
+        _tl.addWidget(self.timeline)
+        lv.addWidget(_side(_tlw))
+        lv.addSpacing(12)
 
         # Raccourcis : chips « touche » + libellé discret. Une page par mode
         # (montage / highlight) dans une pile : même hauteur, rien ne bouge
@@ -529,18 +550,17 @@ class MainWindow(QMainWindow):
             ],
             [   # mode highlight
                 [(KL("I"), "garder séquence"), (KL("N"), "jeter séquence"),
-                 ("Espace", "revoir séquence"), ("⇧← ⇧→", "séq. préc. / suiv.")],
-                [(KL("Z"), "annuler"), (KL("M"), "muet"), ("← →", "±5 s"), ("↑ ↓", "vitesse"),
+                 ("Espace", "revoir séquence"), ("← →", "séquence")],
+                [(KL("Z"), "annuler"), (KL("M"), "muet"), ("⇧← →", "±5 s"), ("↑ ↓", "vitesse"),
                  ("Échap", "quitter highlight")],
             ],
         ]
         self.hints_stack = QStackedWidget()
         for rows in hint_pages:
-            hints = QWidget()
+            hints = GlassPanel(radius=22, glow=0.5)
             hints.setObjectName("hints")
-            themed(hints, lambda: f"QWidget#hints{{background:{UI['bg']};border:none;}}")
             hv = QVBoxLayout(hints)
-            hv.setContentsMargins(12, 6, 12, 8)
+            hv.setContentsMargins(16, 8, 16, 9)
             hv.setSpacing(4)
             for row in rows:
                 hl = QHBoxLayout(); hl.setSpacing(6); hl.setContentsMargins(0, 0, 0, 0)
@@ -551,16 +571,17 @@ class MainWindow(QMainWindow):
                 hl.addStretch()
                 hv.addLayout(hl)
             self.hints_stack.addWidget(hints)
-        lv.addWidget(self.hints_stack)
+        lv.addWidget(_side(self.hints_stack))
 
         # ── Right ──
         # Largeur souple entre deux bornes plutôt que figée : le panneau suit la
         # fenêtre, et son contenu défile quand la hauteur ne suffit plus.
         right = QWidget()
-        right.setMinimumWidth(340)   # largeur mini du contenu + la barre de défilement
-        right.setMaximumWidth(440)
+        right.setMinimumWidth(380)   # largeur mini du contenu + la barre de défilement
+        right.setMaximumWidth(460)
+        self._right_pane = right
         right.setObjectName("rightPane")
-        themed(right, lambda: f"QWidget#rightPane{{background:{UI['bg']};border-left:1px solid {UI['border']};}}")
+        themed(right, lambda: f"QWidget#rightPane{{background:{UI['bg']};border:none;}}")
         right_outer = QVBoxLayout(right)
         right_outer.setContentsMargins(0, 0, 0, 0)
         right_outer.setSpacing(0)
@@ -577,8 +598,8 @@ class MainWindow(QMainWindow):
         themed(right_panel, lambda: f"QWidget#rightPanel{{background:{UI['bg']};}}")
         right_scroll.setWidget(right_panel)
         rv = QVBoxLayout(right_panel)
-        rv.setContentsMargins(12, 12, 12, 12)
-        rv.setSpacing(10)
+        rv.setContentsMargins(8, 10, 10, 12)
+        rv.setSpacing(16)
 
         # Le panneau est une pile de cartes ; `rv` reste la pile, `cv` la carte courante.
         card, cv = _card("Match", spacing=10)
@@ -842,7 +863,7 @@ class MainWindow(QMainWindow):
         splitter = QSplitter(Qt.Orientation.Horizontal)
         splitter.setChildrenCollapsible(False)   # ni le lecteur ni le panneau ne disparaissent
         splitter.setHandleWidth(1)
-        themed(splitter, lambda: f"QSplitter::handle{{background:{UI['border']};}}")
+        themed(splitter, lambda: "QSplitter::handle{background:transparent;}")
         splitter.addWidget(left)
         splitter.addWidget(right)
         splitter.setStretchFactor(0, 1)   # tout l'espace gagné va au lecteur
@@ -851,13 +872,21 @@ class MainWindow(QMainWindow):
         rl.addWidget(splitter)
         self._splitter = splitter
 
+    def showEvent(self, event):
+        super().showEvent(event)
+        if not getattr(self, "_entered", False):
+            self._entered = True
+            # Entrée unique (<= 0,34 s), lancée APRÈS le premier rendu, 3 groupes.
+            QTimer.singleShot(90, lambda: setattr(self, "_entrance", play_entrance(
+                [self._tb_wrap, self._right_pane, self.hints_stack])))
+
     def resizeEvent(self, event):
         # Sous ~1080 px, les libellés de la barre ne tiennent plus côte à côte :
         # ils tombent à l'icône seule, l'info-bulle prenant le relais.
         super().resizeEvent(event)
         if hasattr(self, "open_btn"):   # un resize peut précéder la construction de l'UI
             self._set_compact_toolbar(self.width() < 1500)
-            self.brand_lbl.setVisible(self.width() >= 1100)
+            self.brand_lbl.setVisible(self.width() >= 1320)
 
     def _set_compact_toolbar(self, compact: bool):
         if getattr(self, "_compact_toolbar", None) == compact:
@@ -874,10 +903,17 @@ class MainWindow(QMainWindow):
     def _fit_toolbar(self):
         """Chaque bouton garde au moins la largeur de son texte (jamais tronqué) :
         c'est la liste d'historique qui encaisse le manque de place."""
-        for b in (self.open_btn, self.new_win_btn, self.merge_btn, self.hl_btn, self.mute_btn):
+        for b in (self.open_btn, self.new_win_btn, self.merge_btn, self.hl_btn):
             b.setMinimumWidth(0)
             b.setMinimumWidth(b.sizeHint().width())
-        self.speed_lbl.setMinimumWidth(max(48, self.speed_lbl.sizeHint().width()))
+        # Puces dont le texte change d'état : largeur FIXE calée sur le texte le plus long
+        # (« Son » / « Muet », 1× … 3×) : jamais tronquées, la barre ne bouge pas au basculement.
+        def _fixed_for(w, texts, pad=14):
+            w.ensurePolished()
+            fm = w.fontMetrics()
+            w.setFixedWidth(max(fm.horizontalAdvance(t) for t in texts) + 2 * pad + 2 + 6)
+        _fixed_for(self.mute_btn, ("Son", "Muet"))
+        _fixed_for(self.speed_lbl, [f"{r:g}×" for r in self._speed_presets])
         self.history_combo.setMinimumWidth(90)
 
     # ── Player ────────────────────────────────────────────────────────────────
@@ -1130,13 +1166,15 @@ class MainWindow(QMainWindow):
                         self._undo()
                     return True
                 shift = bool(e.modifiers() & Qt.KeyboardModifier.ShiftModifier)
+                # Mode highlight : ← → (sans ⇧) = séquence préc. / suiv. ; ⇧← → = ±5 s.
+                # Hors mode highlight : ← → = ±5 s (inchangé).
                 if k == Qt.Key.Key_Left:
-                    if self._hl_review and shift:
-                        self._hl_step(-1); return True
+                    if self._hl_review and not shift:
+                        self._hl_step(-1, wrap=False); return True
                     self._seek(self.player.position() / 1000.0 - 5.0); return True
                 if k == Qt.Key.Key_Right:
-                    if self._hl_review and shift:
-                        self._hl_step(1); return True
+                    if self._hl_review and not shift:
+                        self._hl_step(1, wrap=False); return True
                     self._seek(self.player.position() / 1000.0 + 5.0); return True
                 if lk == "I":     self._hl_decide(True);  return True
                 if lk == "N":     self._hl_decide(False); return True
@@ -1257,7 +1295,7 @@ class MainWindow(QMainWindow):
         if self.rot_toggle.isChecked() != on:
             self.rot_toggle.setChecked(on)      # rappelle cette méthode via toggled
             return
-        self.rot_toggle.setText(f"{'▾' if on else '▸'}  ROTATION")
+        self.rot_toggle.setText(f"{'▾' if on else '▸'}  Rotation")
         self.rot_body.setVisible(on)
 
     def _toggle_rotation(self):
@@ -1345,6 +1383,7 @@ class MainWindow(QMainWindow):
         dlg.resize(620, 560)
         dlg.setMinimumSize(360, 280)
         themed(dlg, lambda: f"QDialog{{background:{UI['bg']}; color:{UI['text']};}}")
+        glass_dialog(dlg)
 
         outer = QVBoxLayout(dlg)
         outer.setContentsMargins(0, 0, 0, 0)
@@ -1370,13 +1409,13 @@ class MainWindow(QMainWindow):
 
         def sec_lbl(text):
             label = QLabel(text)
-            themed(label, lambda: f"color:{UI['faint']};font-size:10px;font-weight:bold;letter-spacing:2px;margin-top:6px;")
+            themed(label, lambda: f"color:{UI['text']};font-size:15px;font-weight:600;margin-top:6px;")
             return label
 
         def hline():
             frame = QFrame()
             frame.setFrameShape(QFrame.Shape.HLine)
-            themed(frame, lambda: f"color:{UI['surface']};")
+            themed(frame, lambda: f"color:{UI['border']};")
             return frame
 
         if not stats:
@@ -1384,17 +1423,17 @@ class MainWindow(QMainWindow):
             themed(empty, lambda: f"font-size:13px; color:{UI['muted']};")
             content.addWidget(empty)
         else:
-            title = QLabel("MATCH TERMINÉ")
+            title = QLabel("Match terminé")
             title.setAlignment(Qt.AlignmentFlag.AlignCenter)
-            themed(title, lambda: f"color:{UI['dim']};font-size:10px;font-weight:bold;letter-spacing:4px;")
+            themed(title, lambda: f"color:{UI['muted']};font-size:13px;font-weight:600;")
             content.addWidget(title)
 
             score = QLabel()
             def _score_css(score=score):
                 score.setText(
-                    f"<span style='color:{UI['p1']}'>{p1n}</span>"
+                    f"<span style='color:{UI['p1_text']}'>{p1n}</span>"
                     f"&nbsp;&nbsp;<b>{stats['p1_sets']} – {stats['p2_sets']}</b>&nbsp;&nbsp;"
-                    f"<span style='color:{UI['p2']}'>{p2n}</span>"
+                    f"<span style='color:{UI['p2_text']}'>{p2n}</span>"
                 )
                 return "font-size:20px;font-weight:bold;padding:4px 0 2px 0;"
             score.setAlignment(Qt.AlignmentFlag.AlignCenter)
@@ -1415,7 +1454,7 @@ class MainWindow(QMainWindow):
                 content.addWidget(ranks)
             content.addWidget(hline())
 
-            content.addWidget(sec_lbl("STATS GLOBALES"))
+            content.addWidget(sec_lbl("Stats globales"))
             p1_wins = stats["p1_sets"] > stats["p2_sets"]
             global_rows = [
                 ("Sets gagnés",
@@ -1436,11 +1475,11 @@ class MainWindow(QMainWindow):
                 left = QLabel(label)
                 themed(left, lambda: f"color:{UI['muted']};font-size:12px;")
                 r1 = QLabel(v1)
-                themed(r1, lambda c1=c1: f"color:{UI[c1]};font-size:12px;font-weight:bold;")
+                themed(r1, lambda c1=c1: f"color:{UI[c1 + '_text' if c1 in ('p1', 'p2') else c1]};font-size:12px;font-weight:bold;")
                 vs = QLabel("  vs  ")
                 themed(vs, lambda: f"color:{UI['faint']};font-size:11px;")
                 r2 = QLabel(v2)
-                themed(r2, lambda c2=c2: f"color:{UI[c2]};font-size:12px;font-weight:bold;")
+                themed(r2, lambda c2=c2: f"color:{UI[c2 + '_text' if c2 in ('p1', 'p2') else c2]};font-size:12px;font-weight:bold;")
                 layout.addWidget(left)
                 layout.addStretch()
                 layout.addWidget(r1)
@@ -1449,13 +1488,13 @@ class MainWindow(QMainWindow):
                 content.addWidget(row)
 
             content.addWidget(hline())
-            content.addWidget(sec_lbl("DÉTAIL PAR SET"))
+            content.addWidget(sec_lbl("Détail par set"))
             for i, sd in enumerate(stats["sets"]):
                 sp1, sp2 = sd["score"]
                 header_color = "p1" if sp1 > sp2 else "p2"
                 first_srv = p1n if sd["fsrv"] == 1 else p2n
                 hdr = QLabel(f"Set {i + 1}  ·  {sp1} – {sp2}  ·  1er service : {first_srv}")
-                themed(hdr, lambda hc=header_color: f"color:{UI[hc]};font-size:12px;font-weight:bold;margin-top:4px;")
+                themed(hdr, lambda hc=header_color: f"color:{UI[hc + '_text']};font-size:12px;font-weight:bold;margin-top:4px;")
                 content.addWidget(hdr)
                 row = QWidget()
                 layout = QHBoxLayout(row)
@@ -1463,9 +1502,9 @@ class MainWindow(QMainWindow):
                 left = QLabel("  Service gagné")
                 themed(left, lambda: f"color:{UI['dim']};font-size:11px;")
                 r1 = QLabel(f"{p1n}  {pct(sd['p1_won_srv'], sd['p1_tot_srv'])}")
-                themed(r1, lambda: f"color:{UI['p1']};font-size:11px;")
+                themed(r1, lambda: f"color:{UI['p1_text']};font-size:11px;")
                 r2 = QLabel(f"{p2n}  {pct(sd['p2_won_srv'], sd['p2_tot_srv'])}")
-                themed(r2, lambda: f"color:{UI['p2']};font-size:11px;")
+                themed(r2, lambda: f"color:{UI['p2_text']};font-size:11px;")
                 layout.addWidget(left)
                 layout.addStretch()
                 layout.addWidget(r1)
@@ -1488,9 +1527,7 @@ class MainWindow(QMainWindow):
         close_btn = QPushButton("Fermer")
         close_btn.clicked.connect(dlg.accept)
         themed(close_btn, lambda: (
-            f"QPushButton{{background:{UI['surface']};color:{UI['text']};border:none;border-radius:6px;"
-            "padding:8px 28px;font-size:13px;margin:12px 20px 20px 20px;}"
-            f"QPushButton:hover{{background:{UI['border']};}}"
+            "QPushButton{padding:8px 28px;font-size:13px;margin:12px 20px 20px 20px;}"
         ))
         outer.addWidget(close_btn, alignment=Qt.AlignmentFlag.AlignHCenter)
         # Non modale, comme la fenêtre de fusion : elle peut rester ouverte à côté.
@@ -1657,8 +1694,9 @@ class MainWindow(QMainWindow):
                    key=lambda j: min(abs(t - self._hl_segments[j][0]),
                                      abs(t - self._hl_segments[j][1])))
 
-    def _hl_step(self, delta: int):
-        """Séquence précédente / suivante pendant la revue (⇧← / ⇧→)."""
+    def _hl_step(self, delta: int, wrap: bool = True):
+        """Séquence précédente / suivante pendant la revue (← / →). wrap=False : aux bords
+        (pas de suivante / précédente), on reste sur place."""
         n = len(self._hl_segments)
         if not self._hl_review or n == 0:
             return
@@ -1667,7 +1705,10 @@ class MainWindow(QMainWindow):
             cur = 0 if delta > 0 else n - 1
             self._hl_goto(cur)
             return
-        self._hl_goto((cur + delta) % n)
+        nxt = cur + delta
+        if not wrap and not (0 <= nxt < n):
+            return
+        self._hl_goto(nxt % n)
 
     def _hl_toggle(self):
         if self._hl_review:
@@ -1690,7 +1731,7 @@ class MainWindow(QMainWindow):
             # en repartant de la séquence sous la tête de lecture.
             idx = max(0, self._hl_index_near(self.current_time))
             self._hl_status_msg("Toutes les séquences sont triées — I / N pour corriger, "
-                                "⇧← ⇧→ pour changer de séquence.", "warn")
+                                "← → pour changer de séquence.", "warn")
         self._hl_review = True
         self.hl_btn.setChecked(True)
         self._set_hints_mode(True)
@@ -1775,7 +1816,7 @@ class MainWindow(QMainWindow):
                 "MODE HIGHLIGHT  ·  clique une séquence sur la timeline  ·  Échap quitter", "pending")
             return
         st = self._hl_status[self._hl_idx]
-        txt = f"SÉQUENCE {self._hl_idx + 1} / {n}  ·  {KL('I')} garder  ·  {KL('N')} jeter  ·  ⇧← ⇧→ naviguer"
+        txt = f"SÉQUENCE {self._hl_idx + 1} / {n}  ·  {KL('I')} garder  ·  {KL('N')} jeter  ·  ← → naviguer"
         state = "pending"
         if st is True:
             txt += "  ·  ✓ GARDÉE"; state = "keep"
@@ -2613,112 +2654,127 @@ class MainWindow(QMainWindow):
                 item.setForeground(QColor(UI["p1"]) if a.player == 1 else QColor(UI["p2"]))
 
     def _apply_styles(self):
-        # Palette : jetons UI du thème actif (sombre ou clair, cf. style.py).
+        # Verre néon « Cockpit » : fonds translucides, texte blanc sur vitre sombre, bords
+        # fins avec reflet en haut. Jetons UI dans style.py. Un border-radius supérieur à la
+        # moitié de la hauteur serait ignoré par Qt : tous les rayons restent en dessous.
         self.setStyleSheet(f"""
             QMainWindow, QWidget {{
-                background:{UI['bg']}; color:{UI['text']}; font-size:13px;
+                background:transparent; color:{UI['text']}; font-size:13px;
             }}
-            QDialog {{ background:{UI['bg']}; }}
+            QDialog, QMessageBox {{ background:{UI['veil']}; }}
 
             QToolTip {{
-                background:{UI['raised']}; color:{UI['text']};
-                border:1px solid {UI['border']}; border-radius:6px;
+                background:{UI['popup']}; color:{UI['text']};
+                border:1px solid {UI['border_hover']}; border-radius:8px;
                 padding:6px 9px; font-size:12px;
             }}
-
-            /* ── Cartes de section ── */
-            QFrame#card {{
-                background:{UI['surface']}; border:1px solid {UI['border']};
-                border-radius:10px;
+            QMenu {{
+                background:{UI['popup']}; color:{UI['text']}; border:1px solid {UI['border_hover']};
+                border-radius:10px; padding:4px;
             }}
+            QMenu::item {{ padding:6px 18px; border-radius:6px; }}
+            QMenu::item:selected {{ background:{UI['selected']}; }}
+
+            /* ── Cartes de verre ── */
+            QFrame#card, QFrame#hints, QFrame#toolbar {{ background:transparent; border:none; }}
             QLabel {{ background:transparent; }}
             QWidget#scoreboard, QWidget#scoreboard > QWidget {{ background:transparent; }}
             QLabel#sectionTitle {{
-                color:{UI['muted']}; font-size:10px; font-weight:700;
-                letter-spacing:2px; background:transparent; padding:0;
+                color:{UI['text']}; font-size:15px; font-weight:600; background:transparent; padding:0;
             }}
             QPushButton#sectionToggle {{
                 background:transparent; border:none; padding:0; min-height:0;
-                color:{UI['muted']}; font-size:10px; font-weight:700;
-                letter-spacing:2px; text-align:left;
+                color:{UI['text']}; font-size:15px; font-weight:600; text-align:left;
             }}
-            QPushButton#sectionToggle:hover {{ color:{UI['text']}; background:transparent; }}
+            QPushButton#sectionToggle:hover {{ color:{UI['accent']}; background:transparent; }}
             QLabel#fieldLabel {{
-                color:{UI['muted']}; font-size:11px; background:transparent;
+                color:{UI['muted']}; font-size:12px; background:transparent;
             }}
             QLabel#kbd {{
                 background:{UI['raised']}; color:{UI['text']}; border:1px solid {UI['border']};
-                border-radius:4px; padding:1px 5px; font-size:10px; font-weight:700;
+                border-radius:8px; padding:1px 7px; font-size:11px; font-weight:600;
             }}
-            QLabel#hint {{ color:{UI['muted']}; font-size:11px; background:transparent; }}
+            QLabel#hint {{ color:{UI['muted']}; font-size:12px; background:transparent; }}
             QLabel#badge {{
-                background:{UI['raised']}; color:{UI['muted']}; border:1px solid {UI['border']};
-                border-radius:8px; padding:0 14px; font-size:12px; font-weight:700;
+                background:{UI['surface']}; color:{UI['text']}; border:1px solid {UI['border']};
+                border-radius:17px; padding:0 14px;
+                font-size:12px; font-weight:600;
             }}
 
             /* ── Boutons ── */
             QPushButton {{
-                background:{UI['raised']}; color:{UI['text']}; border:1px solid {UI['border']};
-                padding:7px 14px; border-radius:8px; min-height:20px;
+                background:{UI['raised']}; color:{UI['text']}; border:1px solid {UI['border_hover']};
+                padding:7px 14px; border-radius:14px; min-height:20px;
             }}
             QPushButton:hover    {{ background:{UI['hover']}; border-color:{UI['border_hover']}; }}
-            QPushButton:pressed  {{ background:{UI['surface']}; }}
-            QPushButton:disabled {{ background:{UI['surface']}; color:{UI['faint']}; border-color:{UI['border']}; }}
+            QPushButton:pressed  {{ background:{UI['glass_top']}; }}
+            QPushButton:disabled {{ background:{UI['glass_top']}; color:{UI['faint']}; border-color:{UI['border']}; }}
+            QPushButton:focus    {{ outline:none; }}
 
+            /* Bouton principal : accent bleu -> cyan léger, filet clair fin, texte blanc. */
             QPushButton[variant="primary"] {{
-                background:{UI['accent']}; color:{UI['on_accent']}; border:none;
-                font-weight:700; padding:9px 16px;
+                background:qlineargradient(x1:0, y1:0, x2:1, y2:1,
+                    stop:0 rgba(60,130,235,170), stop:1 rgba(92,200,255,150));
+                color:{UI['text']}; border:1px solid rgba(190,232,255,150);
+                font-weight:700; padding:9px 16px; border-radius:16px;
             }}
-            /* Bouton bleu dans la barre d'outils : sa marge verticale de 9 px le rendait
-               plus haut (38 px) que ses voisins (34 px). */
-            QPushButton[variant="primary"][inToolbar="true"] {{ padding:0 16px; }}
-            QPushButton[variant="primary"]:hover    {{ background:{UI['accent_hover']}; }}
-            QPushButton[variant="primary"]:pressed  {{ background:{UI['accent_pressed']}; }}
-            QPushButton[variant="primary"]:disabled {{ background:{UI['accent_dis_bg']}; color:{UI['accent_dis_fg']}; }}
+            QPushButton[variant="primary"][inToolbar="true"] {{ padding:0 18px; border-radius:17px; }}
+            QPushButton[variant="primary"]:hover {{
+                background:qlineargradient(x1:0, y1:0, x2:1, y2:1,
+                    stop:0 rgba(75,145,245,205), stop:1 rgba(110,212,255,185));
+                border-color:rgba(220,244,255,200);
+            }}
+            QPushButton[variant="primary"]:pressed  {{ background:rgba(60,130,235,120); }}
+            QPushButton[variant="primary"]:disabled {{
+                background:{UI['accent_dis_bg']}; color:{UI['accent_dis_fg']}; border-color:{UI['border']};
+            }}
 
             QPushButton[variant="danger"] {{
-                background:transparent; color:{UI['danger']};
-                border:1px solid {UI['danger_bg']}; font-size:12px;
+                background:{UI['danger_pressed']}; color:{UI['danger_text']};
+                border:1px solid {UI['danger_edge']}; font-size:12px;
             }}
             QPushButton[variant="danger"]:hover   {{ background:{UI['danger_bg']}; color:{UI['danger_soft']}; }}
             QPushButton[variant="danger"]:pressed {{ background:{UI['danger_pressed']}; }}
 
             QPushButton[variant="ghost"] {{
                 background:transparent; color:{UI['muted']};
-                border:1px solid {UI['border']}; font-size:12px;
+                border:1px solid {UI['border_hover']}; font-size:12px;
             }}
             QPushButton[variant="ghost"]:hover   {{ background:{UI['raised']}; color:{UI['text']}; }}
-            QPushButton[variant="ghost"]:pressed {{ background:{UI['surface']}; }}
+            QPushButton[variant="ghost"]:pressed {{ background:{UI['glass_top']}; }}
 
             QPushButton[variant="toolbar"] {{
                 background:{UI['raised']}; color:{UI['muted']}; border:1px solid {UI['border']};
-                padding:0 10px; border-radius:8px;
+                padding:0 14px; border-radius:17px;
             }}
-            QPushButton[variant="toolbar"]:hover   {{ background:{UI['raised']}; color:{UI['text']}; }}
-            QPushButton[variant="toolbar"]:checked {{ background:{UI['danger_bg']}; color:{UI['danger_text']}; border-color:{UI['danger_edge']}; }}
+            QPushButton[variant="toolbar"]:hover   {{ background:{UI['hover']}; color:{UI['text']}; }}
+            QPushButton[variant="toolbar"]:checked {{ background:rgba(255,90,106,40); color:{UI['danger_text']}; border:1px solid rgba(255,90,106,115); }}
             QPushButton#hlBtn:checked {{ background:{UI['success_bg']}; color:{UI['success']}; border-color:{UI['success_edge']}; }}
 
             QPushButton[variant="seg"] {{
                 background:transparent; color:{UI['muted']}; border:none;
-                border-radius:6px; font-size:11px; padding:4px 10px; min-height:20px;
+                border-radius:10px; font-size:12px; padding:4px 10px; min-height:20px;
             }}
             QPushButton[variant="seg"]:hover   {{ color:{UI['text']}; background:{UI['hover']}; }}
-            QPushButton[variant="seg"]:checked {{ background:{UI['accent']}; color:{UI['on_accent']}; font-weight:700; }}
-            QWidget#segGroup {{ background:{UI['raised']}; border:1px solid {UI['border']}; border-radius:8px; }}
+            QPushButton[variant="seg"]:checked {{
+                background:{UI['accent_bg']}; color:{UI['text']}; font-weight:700;
+                border:1px solid {UI['accent_edge']};
+            }}
+            QWidget#segGroup {{ background:{UI['field']}; border:1px solid {UI['border']}; border-radius:14px; }}
 
             /* ── Champs ── */
             QLineEdit {{
-                background:{UI['raised']}; border:1px solid {UI['border']};
-                border-radius:8px; padding:6px 10px; color:{UI['text']};
-                selection-background-color:{UI['accent']}; selection-color:{UI['on_accent']};
+                background:{UI['field']}; border:1px solid {UI['border']};
+                border-radius:10px; padding:6px 10px; color:{UI['text']};
+                selection-background-color:{UI['accent_edge']}; selection-color:{UI['text']};
             }}
             QLineEdit:hover {{ border-color:{UI['border_hover']}; }}
             QLineEdit:focus {{ border:1px solid {UI['accent']}; }}
             QLineEdit::placeholder {{ color:{UI['faint']}; }}
 
             QSpinBox, QDoubleSpinBox {{
-                background:{UI['raised']}; border:1px solid {UI['border']};
-                border-radius:8px; padding:5px 8px; color:{UI['text']};
+                background:{UI['field']}; border:1px solid {UI['border']};
+                border-radius:10px; padding:5px 8px; color:{UI['text']};
             }}
             QSpinBox:focus, QDoubleSpinBox:focus {{ border-color:{UI['accent']}; }}
             QSpinBox::up-button, QDoubleSpinBox::up-button,
@@ -2727,15 +2783,15 @@ class MainWindow(QMainWindow):
             QCheckBox {{ color:{UI['muted']}; font-size:12px; spacing:8px; background:transparent; }}
             QCheckBox::indicator {{
                 width:16px; height:16px; border-radius:5px;
-                border:1px solid {UI['border']}; background:{UI['raised']};
+                border:1px solid {UI['border_hover']}; background:{UI['field']};
             }}
             QCheckBox::indicator:hover {{ border-color:{UI['accent']}; }}
             QCheckBox::indicator:checked {{ background:{UI['accent']}; border-color:{UI['accent']}; }}
 
             /* ── Liste déroulante ── */
             QComboBox {{
-                background:{UI['raised']}; color:{UI['text']};
-                border:1px solid {UI['border']}; border-radius:8px;
+                background:{UI['field']}; color:{UI['text']};
+                border:1px solid {UI['border']}; border-radius:14px;
                 padding:6px 28px 6px 12px; min-height:18px;
             }}
             QComboBox:hover    {{ border-color:{UI['border_hover']}; }}
@@ -2747,46 +2803,52 @@ class MainWindow(QMainWindow):
                 border-top:5px solid {UI['muted']}; margin-right:10px;
             }}
             QComboBox QAbstractItemView {{
-                background:{UI['raised']}; color:{UI['text']};
-                border:1px solid {UI['border']}; border-radius:8px;
-                selection-background-color:{UI['accent']}; selection-color:{UI['on_accent']};
+                background:{UI['popup']}; color:{UI['text']};
+                border:1px solid {UI['border_hover']}; border-radius:10px;
+                selection-background-color:{UI['accent_bg']}; selection-color:{UI['text']};
                 outline:none; padding:4px;
             }}
 
             /* ── Listes ── */
             QListWidget {{
-                background:{UI['bg']}; border:1px solid {UI['border']}; border-radius:8px;
+                background:{UI['field']}; border:1px solid {UI['border']}; border-radius:12px;
                 font-size:12px; padding:4px; outline:none;
             }}
             QListWidget::item {{
-                padding:6px 10px; border-radius:6px; border-left:3px solid transparent;
+                padding:6px 10px; border-radius:8px; border-left:3px solid transparent;
                 color:{UI['text']};
             }}
-            QListWidget::item:hover    {{ background:{UI['surface']}; }}
+            QListWidget::item:hover    {{ background:{UI['raised']}; }}
             QListWidget::item:selected {{
                 background:{UI['selected']}; border-left:3px solid {UI['accent']}; color:{UI['text']};
             }}
 
             /* ── Barre de progression ── */
             QProgressBar {{
-                border:none; border-radius:4px; background:{UI['raised']};
+                border:none; border-radius:9px; background:{UI['border']};
                 text-align:center; color:{UI['text']}; font-size:11px; font-weight:700;
                 min-height:18px; max-height:18px;
             }}
-            QProgressBar::chunk {{ background:{UI['accent']}; border-radius:4px; }}
+            QProgressBar::chunk {{
+                border-radius:9px;
+                background:qlineargradient(x1:0, y1:0, x2:1, y2:0,
+                    stop:0 rgba(60,130,235,230), stop:1 {UI['accent']});
+            }}
 
             /* ── Ascenseurs ── */
             QScrollBar:vertical {{ background:transparent; width:8px; margin:2px; }}
-            QScrollBar::handle:vertical {{ background:{UI['border']}; border-radius:4px; min-height:24px; }}
-            QScrollBar::handle:vertical:hover {{ background:{UI['border_hover']}; }}
+            QScrollBar::handle:vertical {{ background:{UI['border_hover']}; border-radius:3px; min-height:24px; }}
+            QScrollBar::handle:vertical:hover {{ background:{UI['spec']}; }}
             QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {{ height:0; }}
             QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical {{ background:transparent; }}
             QScrollBar:horizontal {{ background:transparent; height:8px; margin:2px; }}
-            QScrollBar::handle:horizontal {{ background:{UI['border']}; border-radius:4px; min-width:24px; }}
-            QScrollBar::handle:horizontal:hover {{ background:{UI['border_hover']}; }}
+            QScrollBar::handle:horizontal {{ background:{UI['border_hover']}; border-radius:3px; min-width:24px; }}
+            QScrollBar::handle:horizontal:hover {{ background:{UI['spec']}; }}
             QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal {{ width:0; }}
 
-            QSplitter::handle {{ background:{UI['border']}; }}
-        """ + ("" if is_dark() else
-               # Thème clair : coin entre les deux ascenseurs, sinon carré blanc visible.
-               f"QAbstractScrollArea::corner {{ background:{UI['bg']}; border:none; }}"))
+            QTextEdit, QPlainTextEdit {{
+                background:{UI['field']}; color:{UI['text']}; border:1px solid {UI['border']};
+                border-radius:10px; padding:4px;
+            }}
+            QSplitter::handle {{ background:transparent; }}
+        """)

@@ -1,5 +1,12 @@
 # Journal des changements
 
+## 1.1.9 — 2026-10-12
+- **Nouvelle interface** : style verre sombre et sobre, une seule couleur d'accent (bleu-cyan), cartes aux coins arrondis avec une lumière douce, barre d'outils en capsule. Le thème clair est retiré.
+- **Vidéo plus grande** et encadrée d'une vitre aux coins arrondis, avec une lumière d'ambiance (« ambilight ») qui suit les couleurs de l'image, sans coût sur la lecture.
+- **Mode Highlights** : les flèches ← → passent à la séquence précédente ou suivante (on s'arrête à la première et à la dernière) ; Shift + ← → avancent ou reculent de 5 s.
+- **Barre d'outils** : le bouton « Muet » et la vitesse ont une largeur fixe (plus de texte coupé), les noms de vidéos trop longs sont abrégés au milieu.
+- Entrée douce de l'interface à l'ouverture et survols fluides (respecte « Réduire les animations »).
+
 ## 1.1.8 — 2026-10-04
 - **Traînée de balle sur Windows** : le module (réseau BlurBall, scripts et poids) est maintenant livré avec l'app au lieu d'être cherché dans un dossier du Mac (`Documents/Playground`, d'où l'erreur « script introuvable »). À la première traînée, l'app installe seule son environnement Python + torch (carte NVIDIA détectée automatiquement, plusieurs Go, une seule fois). Testé sur Windows avec un extrait de 20 s.
 - **Tableau de stats** : suppression des « +N » (plus grande avance de chaque joueur) à gauche de la courbe de dynamique, peu lisibles et peu utiles.
