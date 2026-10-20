@@ -205,9 +205,14 @@ class _Corner(QWidget):
         self.refresh()
 
     def refresh(self):
+        # Plus de tuile en cache : le fond est recalculé à chaque peinture (12x12 px, quasi gratuit),
+        # donc jamais périmé (halo absent après un _relayout, changement de dpi, etc.).
+        self.update()
+
+    def _make_tile(self) -> QImage | None:
         r = self.geometry()
         if r.width() <= 0:
-            return
+            return None
         dpr = self.devicePixelRatioF()
         img = QImage(max(1, round(r.width() * dpr)), max(1, round(r.height() * dpr)),
                      QImage.Format.Format_ARGB32_Premultiplied)
@@ -217,16 +222,18 @@ class _Corner(QWidget):
         q.translate(-r.x(), -r.y())
         self._stage.paint_background(q, r)
         q.end()
-        self._tile = img
-        self.update()
+        return img
 
     def paintEvent(self, _):
-        if self._tile is None or self._path is None:
+        if self._path is None:
+            return
+        tile = self._make_tile()
+        if tile is None:
             return
         p = QPainter(self)
         p.setRenderHint(QPainter.RenderHint.Antialiasing)
         p.setPen(Qt.PenStyle.NoPen)
-        p.setBrush(QBrush(self._tile))
+        p.setBrush(QBrush(tile))
         p.drawPath(self._path)
 
 
@@ -271,7 +278,11 @@ class VideoStage(GlassPanel):
         self.setMinimumSize(300, 200)
 
     # ── lien avec la vidéo ──
+    FOLLOW_VIDEO = False       # True : le halo suit les couleurs de l'image (scintille avec la vidéo)
+
     def attach(self, video_item):
+        if not self.FOLLOW_VIDEO:
+            return                 # halo fixe (couleur de repli) : plus de variation de luminosité
         sink = video_item.videoSink()
         sink.videoFrameChanged.connect(self._on_frame)
 
@@ -463,6 +474,7 @@ class VideoStage(GlassPanel):
         q.drawImage(0, 0, self._mask(halo, ir))
         q.end()
         self._amb, self._amb_rect = img, halo
+        self._refresh_corners()
 
     # ── peinture ──
     def paint_background(self, p: QPainter, area: QRect | None = None):

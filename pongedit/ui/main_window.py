@@ -342,11 +342,10 @@ class MainWindow(QMainWindow):
         self.setMinimumSize(1000, 540)
         # Décale les fenêtres secondaires pour qu'elles ne se superposent pas.
         try:
-            _off = (int(INSTANCE_SLOT) - 1) * 48
+            _n = int(INSTANCE_SLOT) - 1
         except ValueError:
-            _off = 48
-        if _off:
-            self.move(80 + _off, 80 + _off)
+            _n = 1
+        self.move(40 + _n * 150, 40 + _n * 80)
 
         self.actions_data: list[Action] = []
         # Historique par instantanés : une action posée peut désormais en
@@ -790,6 +789,11 @@ class MainWindow(QMainWindow):
         self.progress_bar = QProgressBar(); self.progress_bar.setTextVisible(True)
         self.progress_bar.setRange(0, 1000)      # 1/10 de % de résolution
         self.progress_bar.setFormat("Export…  0.0%")
+        # Style maison : sans QSS, macOS dessine sa barre native (carré + rond parasites).
+        themed(self.progress_bar, lambda: (
+            f"QProgressBar{{background:{UI['raised']};border:1px solid {UI['border']};"
+            f"border-radius:8px;min-height:16px;text-align:center;color:{UI['text']};}}"
+            f"QProgressBar::chunk{{background:{UI['accent']};border-radius:7px;}}"))
         self.progress_bar.hide(); cv.addWidget(self.progress_bar)
 
         self.export_time_lbl = QLabel()
@@ -899,6 +903,27 @@ class MainWindow(QMainWindow):
             btn.setText(short if compact else full)
         self._apply_mute_state()
         self._fit_toolbar()
+
+    def _shed_toolbar_items(self):
+        """Demi-écran : si la barre ne tient pas, version puis historique s'effacent
+        (au lieu de laisser les boutons se chevaucher)."""
+        if getattr(self, "_shedding", False):   # show/hide relance un Resize : pas de boucle
+            return
+        self._shedding = True
+        try:
+            self._shed_toolbar_items_now()
+        finally:
+            self._shedding = False
+
+    def _shed_toolbar_items_now(self):
+        lay = self._tb_wrap.layout()
+        for w_ in (self.version_btn, self.history_combo):
+            w_.setVisible(True)
+        for w_ in (self.version_btn, self.history_combo):
+            lay.activate()
+            if lay.totalMinimumSize().width() <= self._tb_wrap.width():
+                break
+            w_.setVisible(False)
 
     def _fit_toolbar(self):
         """Chaque bouton garde au moins la largeur de son texte (jamais tronqué) :
@@ -1143,6 +1168,11 @@ class MainWindow(QMainWindow):
         self.setFocus(Qt.FocusReason.OtherFocusReason)
 
     def eventFilter(self, obj: QObject, e: QEvent) -> bool:
+        # (filtre installé sur toute l'app : il reçoit aussi les Resize de la barre)
+        if (e.type() == QEvent.Type.Resize and obj is getattr(self, "_tb_wrap", None)
+                and hasattr(self, "version_btn")):
+            self._shed_toolbar_items()
+            return False
         if e.type() == QEvent.Type.KeyPress and not e.isAutoRepeat():
             k  = e.key()
             if k in (Qt.Key.Key_Return, Qt.Key.Key_Enter) and self._leave_field_on_enter():
@@ -2064,29 +2094,35 @@ class MainWindow(QMainWindow):
         self.cancel_btn.setEnabled(True); self.cancel_btn.show()
         # Pendant la prépa : barre "indéterminée" (animation défilante) — l'attente vit.
         self._encode_started = False
-        self.progress_bar.setRange(0, 0)
+        self.progress_bar.setRange(0, 1000)
+        self.progress_bar.setValue(0)
         self.progress_bar.setFormat("Préparation…")
         self.progress_bar.show()
         self.export_time_lbl.setText("🎬  Préparation du montage…")
         self.export_time_lbl.show()
         self.export_status.hide()
 
-        self._worker = ExportWorker(
-            video_path=self.video_path,
-            actions=actions,
-            p1n=self.scoreboard.p1_name(),
-            p2n=self.scoreboard.p2_name(),
-            overlay_dur=self.overlay_spin.value(),
-            font_size=44,
-            duration=self.duration,
-            export_name=export_name,
-            first_server=self.first_server,
-            p1_rank=self.scoreboard.p1_rank(),
-            p2_rank=self.scoreboard.p2_rank(),
-            stats_card=self.stats_card_btn.isChecked(),
-            intro_card=self._intro_effective() if self.intro_btn.isChecked() else None,
-            match_format=self.match_format,
-        )
+        try:
+            self._worker = ExportWorker(
+                video_path=self.video_path,
+                actions=actions,
+                p1n=self.scoreboard.p1_name(),
+                p2n=self.scoreboard.p2_name(),
+                overlay_dur=self.overlay_spin.value(),
+                font_size=44,
+                duration=self.duration,
+                export_name=export_name,
+                first_server=self.first_server,
+                p1_rank=self.scoreboard.p1_rank(),
+                p2_rank=self.scoreboard.p2_rank(),
+                stats_card=self.stats_card_btn.isChecked(),
+                intro_card=self._intro_effective() if self.intro_btn.isChecked() else None,
+                match_format=self.match_format,
+            )
+        except Exception as exc:
+            self._worker = None
+            self._export_error(f"Export impossible : {exc}")
+            return
         self._worker.progress.connect(self._on_progress)
         self._worker.encode_started.connect(self._on_encode_started)
         self._worker.stage.connect(self._export_stage)
@@ -2357,13 +2393,21 @@ class MainWindow(QMainWindow):
         # Fermer la fenêtre coupe son export en cours (ffmpeg) au lieu de le laisser
         # tourner en orphelin et saturer le CPU. Pour laisser un export finir : garde
         # la fenêtre ouverte.
-        w = getattr(self, "_worker", None)
-        if w is not None and w.isRunning():
-            w.cancel()
-        tw = getattr(self, "_trail_worker", None)
-        if tw is not None and tw.isRunning():
-            tw.cancel()
-            w.wait(3000)
+        # Chaque thread est annulé PUIS attendu : un QThread détruit alors qu'il tourne
+        # fait abort() (crash à la fermeture).
+        for name in ("_worker", "_trail_worker"):
+            t = getattr(self, name, None)
+            if t is not None and t.isRunning():
+                try:
+                    t.cancel()
+                except Exception:
+                    pass
+        for name in ("_worker", "_trail_worker"):
+            t = getattr(self, name, None)
+            if t is not None and t.isRunning():
+                if not t.wait(5000):
+                    t.terminate()
+                    t.wait(2000)
         super().closeEvent(event)
 
     # ── Carte d'intro ─────────────────────────────────────────────────────────

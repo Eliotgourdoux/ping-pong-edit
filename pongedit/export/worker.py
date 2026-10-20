@@ -100,6 +100,9 @@ class ExportWorker(QThread):
             # Intro : `lead` s d'image figée (nombre entier d'images) avant le
             # montage. lead = 0 sans intro : tout le reste est alors inchangé.
             intro_on = bool(self.intro_card)
+            from pongedit.export import diag
+            diag.log(f"Intro demandee : {'oui' if intro_on else 'non'} - {len(self.actions)} actions, "
+                     f"duree source {self.duration:.0f} s")
             lead_frames, lead = 0, 0.0
             if intro_on:
                 vid_fps = _get_fps(self.video_path)
@@ -212,6 +215,8 @@ class ExportWorker(QThread):
                             t_gone=lead + _intro.EXIT_DUR))
                     except Exception:
                         import traceback; traceback.print_exc()
+                        from pongedit.export import diag
+                        diag.log("Intro en echec : " + traceback.format_exc()[-600:].replace("\n", " | "))
                         intro_res.clear()
                     intro_res["secs"] = time.monotonic() - t0
                 intro_thread = threading.Thread(target=_intro_job, daemon=True)
@@ -268,8 +273,12 @@ class ExportWorker(QThread):
             if n_segs == 1 and not has_cuts:
                 seg_inputs = [*_hwaccel_args(), "-i", self.video_path]
             else:
+                # Threads bornés : un input par segment, chacun avec ~10 threads de
+                # décodage par défaut, faisait dépasser la limite macOS de 4096 threads
+                # par processus sur un long match → pthread_create échoue et ffmpeg
+                # jette le début de la vidéo (intro + 1er point), voire tout.
                 for _ss, _se in kept_segments:
-                    seg_inputs += [*_hwaccel_args(),
+                    seg_inputs += [*_hwaccel_args(), "-threads", "2",
                                    "-ss", f"{_ss:.4f}", "-to", f"{_se:.4f}",
                                    "-i", self.video_path]
                 _cat = "".join(
@@ -336,6 +345,9 @@ class ExportWorker(QThread):
                 intro_thread.join()
                 print(f"Intro : {intro_res.get('frames', 0)} images "
                       f"({intro_res.get('unique', 0)} uniques) en {intro_res.get('secs', 0):.2f} s")
+                from pongedit.export import diag
+                diag.log(f"Intro : {intro_res.get('frames', 0)} images, "
+                         f"pattern={'oui' if intro_res.get('pattern') else 'NON'}")
                 if intro_res.get("pattern"):
                     n_in = n_segs + extra_inputs.count("-i")
                     fc = fc.replace("[vout]", "[vpreintro]", 1)
@@ -353,11 +365,15 @@ class ExportWorker(QThread):
             self.stage.emit("⚙️  Initialisation du rendu vidéo…")
             self.progress.emit(prep_progress)
 
+            # Même limite : ffmpeg insère un convertisseur swscale devant chaque overlay
+            # (~2 par point), chacun avec un thread par cœur. 4 garde la vitesse ;
+            # 2 au-delà de 150 segments pour rester loin des 4096.
+            fc = f"sws_flags=bicubic:threads={4 if n_segs <= 150 else 2};" + fc
+
             def _make_cmd(software: bool) -> list[str]:
                 """`software` : décodage ET encodage sur le processeur (repli sans matériel)."""
                 return [
                     "ffmpeg", "-y",
-                    "-threads", "0",
                     "-progress", "pipe:1", "-nostats",
                     *(_strip_hwaccel(seg_inputs) if software else seg_inputs),
                     *extra_inputs,
@@ -376,6 +392,9 @@ class ExportWorker(QThread):
             try:
                 diag.log("Commande : " + " ".join(cmd[:cmd.index("-filter_complex")])[:400] + " ... "
                          + " ".join(cmd[cmd.index("-map"):])[:400])
+                # Commande complète (le journal la tronque) : pour comparer deux exports.
+                diag.log_path().with_name("last_export_cmd.txt").write_text(
+                    "\n".join(cmd), encoding="utf-8")
             except Exception:
                 pass
 
